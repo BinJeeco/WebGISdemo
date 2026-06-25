@@ -1,0 +1,5265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGIS demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --bg-main: #F8FAFC;
+  --primary: #1E40AF;
+  --primary-dark: #1E3A8A;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --text-disabled: #CBD5E1;
+  --border-light: #DBEAFE;
+  --input-bg: #E9ECF6;
+  --divider-bg: #E3E7EF;
+  --orange-badge: #D97706;
+  --blue-accent: #3B82F6;
+  --red-accent: #EF4444;
+  --dark-stroke: #475569;
+  --white: #FFFFFF;
+  /* Map gradient stops */
+  --map-top: #E8EDE3;
+  --map-bot: #D9E0D4;
+
+  --topbar-h: 48px;
+  --bottombar-h: 40px;
+  --timeline-h: 32px;
+  --sidebar-w: 320px;
+  --drawer-w: 360px;
+  --toolbar-w: 40px;
+}
+
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-main);
+}
+
+/* ===== App Shell ===== */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg-main);
+}
+
+/* ===== Top Bar (顶栏) ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 12px 12px 12px 16px;
+  background: var(--primary);
+  z-index: 100;
+}
+.topbar .logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* ===== Main Content Area (主内容区) ===== */
+.main-area {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ===== Layer Panel (图层面板) ===== */
+.layer-panel {
+  width: var(--sidebar-w);
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border-right: 1px solid var(--border-light);
+  overflow: hidden;
+  transition: width .25s cubic-bezier(.4,0,.2,1);
+  flex-shrink: 0;
+}
+
+/* Collapse toggle button shared style */
+.panel-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: background .12s, transform .25s ease;
+  flex-shrink: 0;
+}
+.panel-collapse-btn:hover { background: rgba(0,0,0,.06); }
+
+/* Left panel collapsed state */
+.layer-panel.collapsed {
+  width: 48px;
+}
+.layer-panel.collapsed .panel-collapse-btn {
+  transform: rotate(180deg);
+  background: var(--white);
+  border-radius: 6px;
+}
+.layer-panel.collapsed .panel-header,
+.layer-panel.collapsed .layer-scroll,
+.layer-panel.collapsed .layer-legend {
+  display: none;
+}
+.panel-collapsed-header {
+  display: none;
+  justify-content: center;
+  padding: 12px 0;
+  flex-shrink: 0;
+}
+.layer-panel.collapsed .panel-collapsed-header {
+  display: flex;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 12px;
+  background: var(--bg-main);
+  flex-shrink: 0;
+}
+.panel-header h2 {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+.header-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: background .12s;
+}
+.header-icon-btn:hover { background: rgba(0,0,0,.04); }
+
+/* Layer scroll area */
+.layer-scroll {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.layer-scroll::-webkit-scrollbar { width: 4px; }
+.layer-scroll::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+
+/* ===== 符号系统 (Legend) ===== */
+
+/* Legend config popover */
+.legend-config {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  width: 220px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--divider-bg);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 10px;
+}
+.legend-config.show { display: block; }
+.legend-config label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  margin-top: 8px;
+}
+.legend-config label:first-child { margin-top: 0; }
+.legend-config-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.legend-shape-opt {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  border: 1.5px solid var(--divider-bg);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.legend-shape-opt:hover { border-color: var(--blue-accent); background: rgba(59,130,246,.05); }
+.legend-shape-opt.active { border-color: var(--primary); background: rgba(30,64,175,.08); }
+.legend-shape-svg { width: 14px; height: 14px; }
+
+.legend-color-opt {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.legend-color-opt:hover { transform: scale(1.15); }
+.legend-color-opt.active { border-color: var(--primary); transform: scale(1.1); }
+
+/* Categorical value row in popover */
+.legend-cat-val-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.legend-cat-val-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.legend-cat-val-pickers {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.legend-cat-shape-opt {
+  width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px;
+  border: 1.5px solid var(--divider-bg);
+  cursor: pointer;
+  transition: border-color .12s;
+}
+.legend-cat-shape-opt:hover { border-color: var(--blue-accent); }
+.legend-cat-shape-opt.active { border-color: var(--primary); background: rgba(30,64,175,.08); }
+.legend-cat-color-opt {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color .12s, transform .12s;
+}
+.legend-cat-color-opt:hover { transform: scale(1.2); }
+.legend-cat-color-opt.active { border-color: var(--primary); }
+
+.legend-config-close {
+  position: absolute;
+  right: 6px; top: 6px;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.legend-config-close:hover { background: rgba(0,0,0,.05); color: var(--text-primary); }
+
+.legend-cat-type-btn.active {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary) !important;
+}/* Sub-content area below legend item (graduated + categorical legends) */
+.layer-sub-legends {
+  display: none;
+  padding-left: 24px;
+  margin-bottom: 4px;
+}
+.layer-sub-legends.show {
+  display: block;
+  border-bottom: 1px solid var(--divider-bg);
+  padding-bottom: 8px;
+  margin-bottom: 0;
+}
+.legend-subtitle {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-top: 3px;
+}
+.legend-subtitle:first-child { padding-top: 0; }
+
+/* Graduated legend (size-by-property) */
+.legend-graduated {
+  padding: 2px 0;
+}
+.legend-grad-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+}
+.legend-grad-symbol {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.legend-grad-circle {
+  flex-shrink: 0;
+  background: var(--blue-accent);
+}
+.legend-grad-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Categorical legend (value→→hape/color) */
+.legend-categorical {
+  padding: 2px 0;
+}
+.legend-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 16px;
+}
+.legend-cat-symbol {
+  flex-shrink: 0;
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.legend-cat-swatch {
+  flex-shrink: 0;
+  width: 10px; height: 10px;
+}
+.legend-cat-name {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Mini checkbox for category visibility toggle */
+.legend-cat-checkbox {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  border: 1px solid #C8CCD8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all .14s ease;
+  margin-right: 4px;
+}
+.legend-cat-checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.legend-cat-checkbox.checked svg { opacity: 1; display: block; }
+.legend-cat-checkbox:not(.checked) svg { display: none; }
+
+/* Layer group header */
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s;
+}
+.group-header:hover { background: rgba(0,0,0,.02); }
+.group-arrow {
+  font-size: 10px;
+  color: var(--text-secondary);
+  transition: transform .18s ease;
+  line-height: 1;
+}
+.group-header.collapsed .group-arrow { transform: rotate(-90deg); }
+.group-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Layer item row */
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s;
+  border-bottom: 1px solid var(--divider-bg);
+}
+.layer-item:has(+ .layer-sub-legends.show) {
+  border-bottom: none;
+  height: 28px;
+}
+.layer-item:hover { background: rgba(30,64,175,.03); }
+.layer-item.inactive .layer-item-name { color: var(--text-secondary); font-weight: 400; }
+
+/* Checkbox */
+.checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid #C8CCD8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .14s ease;
+  cursor: pointer;
+}
+.checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.checkbox.checked svg { opacity: 1; }
+.checkbox:not(.checked) svg { display: none; }
+
+.layer-item-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-dark);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layer-opacity {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  cursor: ew-resize;
+  user-select: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color .12s, background .12s;
+  position: relative;
+  min-width: 36px;
+  text-align: center;
+}
+.layer-opacity:hover {
+  color: var(--primary);
+  background: var(--input-bg);
+}
+.layer-opacity.dragging {
+  color: var(--primary);
+  background: var(--border-light);
+}
+/* Drag progress bar behind the number */
+.layer-opacity::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--primary);
+  opacity: .4;
+  transition: width .08s ease;
+}
+.layer-item.inactive .layer-opacity.readonly { color: var(--text-disabled); }
+.layer-item.inactive .layer-opacity.readonly:hover { color: var(--text-disabled); background: transparent; }
+.layer-opacity.readonly { cursor: default; }
+
+/* Inline symbol controls inside layer items — always visible */
+.layer-swatch-inline {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  margin-right: 4px;
+}
+.layer-swatch-inline svg { width: 14px; height: 14px; }
+.layer-gear {
+  flex-shrink: 0;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: .55;
+  transition: opacity .12s, background .12s;
+  margin-left: 1px;
+  color: #64748B;
+}
+.layer-gear:hover { opacity: 1; background: rgba(0,0,0,.08); }
+/* Toggle for inline sub-legends */
+.layer-toggle {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  display: none;
+  align-items: center; justify-content: center;
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0; border: none; background: transparent;
+  color: var(--text-muted);
+  transition: transform .15s, color .12s;
+  margin-left: 1px;
+}
+.layer-toggle:hover { color: var(--text-primary); background: rgba(0,0,0,.04); }
+.layer-toggle.visible { display: flex; }
+.layer-toggle.collapsed { transform: rotate(-90deg); }
+/* Sub-legends inside layer items */
+.layer-sub-legends {
+  display: none;
+  padding-left: 36px;
+  margin-bottom: 4px;
+}
+.layer-sub-legends.show {
+  display: block;
+  border-bottom: 1px solid var(--divider-bg);
+  padding-bottom: 8px;
+  margin-bottom: 0;
+}
+.layer-item.layer-config-open { background: rgba(59,130,246,.06); }
+.layer-sub-legends.layer-config-open { background: rgba(59,130,246,.06); }
+.layer-opacity.readonly:hover { color: var(--text-muted); background: transparent; }
+.layer-opacity.readonly::after { display: none; }
+.layer-count-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* Drag handle for reordering layers */
+.layer-drag-handle {
+  flex-shrink: 0;
+  width: 10px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity .12s;
+  margin-left: -8px;
+  margin-right: 2px;
+  color: var(--text-muted);
+}
+.layer-item:hover .layer-drag-handle { opacity: .4; }
+.layer-drag-handle:active { cursor: grabbing; opacity: .8; }
+.layer-drag-handle.dragging { opacity: .8; }
+/* Sub-legends dragged together with layer item */
+.layer-sub-legends.dragging-sub {
+  border: 2px dashed rgba(59,130,246,.3);
+  border-top: none;
+  background: rgba(255,255,255,.95) !important;
+  opacity: .25;
+  position: relative;
+  z-index: 49;
+}
+/* Dragged layer item ghost */
+.layer-item.drag-ghost {
+  opacity: .25;
+  background: rgba(59,130,246,.06) !important;
+  border: 2px dashed rgba(59,130,246,.3);
+  border-bottom: none;
+}
+/* Dragged item visual enhancement */
+.layer-item.dragging-active {
+  background: rgba(255,255,255,.95) !important;
+  z-index: 50;
+  position: relative;
+}
+.layer-group-body {
+  position: relative;
+}
+
+/* ===== Marquee (框选) overlay in layer list ===== */
+.layer-marquee {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  border: 1.5px dashed var(--primary);
+  background: rgba(59,130,246,.08);
+  display: none;
+}
+
+/* ===== Map Canvas (地图画布) ===== */
+.map-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(to right, var(--map-top), var(--map-bot));
+  min-width: 0;
+}
+
+/* Inner layer that pans —contains map grid, markers, regions, labels */
+.map-inner {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  transform-origin: 0 0;
+}
+.map-inner.grabbing {
+  cursor: grabbing;
+}
+
+/* Map overlay grid */
+.map-grid {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(209,217,202,.3);
+  pointer-events: none;
+}
+
+/* Map Toolbar (left floating on map) */
+.map-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: var(--toolbar-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(255,255,255,.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.10);
+  z-index: 10;
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background .12s, color .12s;
+}
+.toolbar-btn:hover { background: rgba(0,0,0,.04); }
+.toolbar-btn.active {
+  background: var(--input-bg);
+  color: var(--primary);
+}
+
+/* Box-select rectangle */
+.selection-box {
+  position: absolute;
+  border: 2px dashed var(--blue-accent);
+  background: rgba(59,130,246,.1);
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* Zoom Control (right bottom of map) */
+.zoom-control {
+  position: absolute;
+  right: 40px;
+  bottom: 60px;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255,255,255,.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.10);
+  z-index: 10;
+  overflow: hidden;
+}
+.zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dark-stroke);
+  transition: background .12s;
+}
+.zoom-btn:hover { background: rgba(0,0,0,.04); }
+.zoom-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--divider-bg);
+}
+
+/* Scale bar */
+.scale-bar {
+  position: absolute;
+  left: 12px;
+  bottom: 55px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+}
+.scale-line {
+  width: 80px;
+  height: 2px;
+  background: var(--dark-stroke);
+}
+.scale-text {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--dark-stroke);
+  font-family: 'Inter', sans-serif;
+}
+
+/* North Arrow */
+.north-arrow {
+  position: absolute;
+  right: 50px;
+  top: 12px;
+  z-index: 10;
+}
+
+/* Attribution */
+.attribution {
+  position: absolute;
+  left: 12px;
+  bottom: 33px;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: inherit;
+  z-index: 5;
+}
+
+/* Map markers / overlays */
+.poi-marker {
+  position: absolute;
+  width: 12px; height: 12px;
+  background: var(--blue-accent);
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform .15s ease;
+}
+.poi-marker:hover { transform: scale(1.3); }
+.poi-marker.picked {
+  transform: scale(1.4);
+  z-index: 20;
+}
+/* Species markers —same visual as POI */
+.species-marker {
+  position: absolute;
+  width: 12px; height: 12px;
+  background: var(--blue-accent);
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25);
+  transition: transform .15s ease;
+}
+.species-marker:hover { transform: scale(1.3); }
+.species-marker.picked {
+  transform: scale(1.4);
+  z-index: 20;
+}
+/* Timeline-driven element states */
+[data-props].time-past {
+  opacity: 0.85 !important;
+  filter: none;
+}
+[data-props].time-active {
+  transform: scale(1.5);
+  z-index: 25;
+  opacity: 1 !important;
+  box-shadow: 0 0 12px 3px rgba(59,130,246,.55);
+  animation: time-pulse .8s ease-in-out infinite alternate;
+}
+[data-props].time-future {
+  opacity: 0.20 !important;
+  filter: grayscale(0.6);
+}
+@keyframes time-pulse {
+  from { box-shadow: 0 0 8px 2px rgba(59,130,246,.4); }
+  to   { box-shadow: 0 0 16px 5px rgba(59,130,246,.7); }
+}
+.poi-orange {
+  width: 12px; height: 12px;
+  background: var(--orange-badge);
+  box-shadow: 0 1px 4px rgba(217,119,6,.4);
+}
+.poi-blue {
+  width: 10px; height: 10px;
+  background: var(--blue-accent);
+  opacity: .85;
+}
+.poi-selected {
+  width: 16px; height: 16px;
+  background: var(--primary);
+  border-radius: 8px;
+  opacity: .90;
+}
+
+.region-outline {
+  position: absolute;
+  border: 1.5px solid rgba(59,130,246,.5);
+  background: rgba(59,130,246,.08);
+  border-radius: 20px;
+  pointer-events: none;
+}
+
+.map-label {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--primary-dark);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* Hidden layer elements */
+[data-layer].layer-hidden { display: none !important; }
+
+/* ===== Right Drawer (右抽屉) ===== */
+.right-drawer {
+  width: var(--drawer-w);
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border-left: 1px solid var(--border-light);
+  overflow: hidden;
+  transition: width .25s cubic-bezier(.4,0,.2,1);
+  flex-shrink: 0;
+}
+
+/* Drawer collapse toggle (mirrored arrow) */
+.drawer-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: background .12s, transform .25s ease;
+  flex-shrink: 0;
+}
+.drawer-collapse-btn:hover { background: rgba(0,0,0,.06); }
+
+/* Right drawer collapsed state */
+.right-drawer.collapsed {
+  width: 48px;
+}
+.right-drawer.collapsed .drawer-collapse-btn {
+  transform: rotate(180deg);
+  background: var(--white);
+  border-radius: 6px;
+}
+.right-drawer.collapsed .drawer-header {
+  justify-content: center;
+  padding: 0;
+  background: var(--white);
+}
+.right-drawer.collapsed .drawer-header h2 {
+  display: none;
+}
+.right-drawer.collapsed .drawer-content {
+  display: none;
+}
+.drawer-collapsed-header {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  flex-shrink: 0;
+}
+/* Collapsed hint: vertical tab strip */
+.drawer-collapsed-strip {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  flex: 1;
+}
+.right-drawer.collapsed .drawer-collapsed-strip {
+  display: flex;
+}
+.drawer-collapsed-strip .strip-tab {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding: 8px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+  letter-spacing: 0.05em;
+}
+.drawer-collapsed-strip .strip-tab:hover { background: rgba(0,0,0,.04); }
+.drawer-collapsed-strip .strip-tab.active { color: var(--primary); background: var(--input-bg); }
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 12px;
+  background: var(--bg-main);
+  flex-shrink: 0;
+}
+.drawer-header h2 {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+/* Drawer content —4-row layout with paired tabs */
+.drawer-content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto 1fr;
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* Tab buttons inside the content grid (rows 1 & 3) */
+.content-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-light);
+  transition: color .12s, box-shadow .12s;
+}
+.content-tab.active {
+  color: var(--primary-dark);
+  box-shadow: inset 0 -2px 0 var(--primary);
+}
+.content-tab:not(.active):hover {
+  color: var(--text-primary);
+  background: rgba(0,0,0,.02);
+}
+
+/* Drawer bottom bar — status + timeline below content */
+/* ===== Bottom Bar (底栏) ===== */
+.bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 8px 12px;
+  background: var(--bg-main);
+  border-top: 1px solid var(--border-light);
+  z-index: 100;
+}
+.status-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.status-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.status-medium { font-weight: 500; }
+
+/* ===== Timeline Panel (时间轴面板) ===== */
+.timeline-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--bg-main);
+  border-top: 1px solid var(--border-light);
+  z-index: 99;
+}
+.play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 28px;
+  height: 24px;
+  background: var(--primary);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--white);
+  transition: background .12s;
+}
+.play-btn:hover { background: #1e3a8a; }
+.timeline-enable-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+.timeline-enable-toggle input[type="checkbox"] {
+  width: 13px; height: 13px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  margin: 0;
+}
+.timeline-enable-toggle span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.time-field-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: -8px;
+}
+/* Disabled timeline state */
+.timeline-panel.disabled .speed-btn,
+.timeline-panel.disabled .play-btn,
+.timeline-panel.disabled .time-field-picker,
+.timeline-panel.disabled .time-slider-track {
+  pointer-events: none;
+  opacity: 0.35;
+}
+.timeline-panel.disabled .time-slider-thumb { display: none; }
+.speed-selector {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.speed-btn {
+  height: 20px;
+  min-width: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--divider-bg);
+  border-radius: 3px;
+  background: var(--white);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .12s;
+}
+.speed-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.speed-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--white);
+}
+.time-field-picker {
+  height: 20px;
+  padding: 0 18px 0 5px;
+  border: 1px solid var(--divider-bg);
+  border-radius: 3px;
+  background: var(--white);
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%2394A3B8' stroke-width='1.2' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  transition: border-color .12s;
+  flex-shrink: 0;
+  max-width: 80px;
+}
+.time-field-picker:hover,
+.time-field-picker:focus {
+  border-color: var(--primary);
+}
+.time-slider-track {
+  width: 400px;
+  height: 6px;
+  background: var(--divider-bg);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+  overflow: visible;
+}
+.time-slider-fill {
+  position: absolute;
+  top: 0; left: 0;
+  width: 0%;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--primary), var(--orange-badge));
+}
+.time-slider-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--white);
+  border: 2.5px solid var(--primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  z-index: 2;
+  transition: box-shadow .12s;
+}
+.time-slider-thumb:active,
+.time-slider-thumb.dragging {
+  cursor: grabbing;
+  box-shadow: 0 2px 10px rgba(30,64,175,.3);
+}
+.time-slider-track.dragging .time-slider-thumb {
+  box-shadow: 0 2px 10px rgba(30,64,175,.3);
+}
+.time-label {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.time-label.current {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+/* Content panel —full-width wrapper for each tab group (rows 2 & 4) */
+.content-panel {
+  grid-column: 1 / -1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+.content-panel::-webkit-scrollbar { width: 4px; }
+.content-panel::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
+
+/* ===== Filter Badge (筛选状态徽标) ===== */
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--orange-badge);
+  color: var(--white);
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.layer-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== Filter Panel (筛选面板) ===== */
+.filter-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  height: 100%;
+}
+.filter-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-section-header label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ===== Section Title (grid cell header) ===== */
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--divider-bg);
+  line-height: 1.3;
+}
+
+/* ===== Search Section ===== */
+.search-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  height: 100%;
+}
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-input-wrap svg {
+  position: absolute;
+  left: 8px;
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 30px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-main);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color .15s;
+}
+.search-input:focus { border-color: var(--primary); }
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.search-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 0;
+}
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.search-result-item:hover { background: var(--input-bg); }
+.search-result-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.search-result-layer {
+  font-size: 10px;
+  color: var(--primary);
+  background: var(--border-light);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.search-result-match {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-main);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Analysis Section ===== */
+.analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  height: 100%;
+}
+.analysis-stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.analysis-stat-card {
+  background: var(--bg-main);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.analysis-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+.analysis-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.analysis-chart-placeholder {
+  flex: 1;
+  min-height: 80px;
+  border: 1px dashed var(--border-light);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.filter-layer-picker {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--white);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  outline: none;
+}
+.filter-layer-picker:focus { border-color: var(--primary); }
+
+.filter-clauses {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.filter-clause {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  transition: opacity .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.filter-clause.disabled {
+  opacity: .4;
+}
+.filter-clause.disabled .filter-field,
+.filter-clause.disabled .filter-operator,
+.filter-clause.disabled .filter-value {
+  pointer-events: none;
+}
+.filter-field, .filter-operator {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--divider-bg);
+  border-radius: 5px;
+  background: var(--bg-main);
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  outline: none;
+}
+.filter-field { min-width: 70px; }
+.filter-operator { min-width: 60px; }
+.filter-field:focus, .filter-operator:focus { border-color: var(--primary); }
+
+.filter-value {
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--divider-bg);
+  border-radius: 5px;
+  background: var(--bg-main);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 50px;
+}
+.filter-value:focus { border-color: var(--primary); }
+
+select.filter-value {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23959BA8' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  font-family: inherit;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.filter-clause-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.filter-clause-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: background .12s, color .12s;
+}
+.filter-clause-btn:hover { background: rgba(0,0,0,.05); color: var(--text-primary); }
+.filter-clause-btn.enable:hover { color: var(--blue-accent); }
+.filter-clause-btn.remove:hover { color: var(--red-accent); }
+
+/* Combinator: AND / OR toggle */
+.filter-combinator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.filter-combinator-line {
+  flex: 1;
+  height: 1px;
+  background: var(--divider-bg);
+}
+.filter-combinator-toggle {
+  padding: 2px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--white);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background .12s;
+}
+.filter-combinator-toggle:hover { background: var(--input-bg); }
+
+/* Empty state */
+.filter-empty-clauses {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 0;
+}
+.filter-empty-clauses p {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.filter-empty-clauses .empty-icon { opacity: .25; }
+
+/* Actions row */
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.filter-btn {
+  flex: 1;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .12s, transform .1s;
+}
+.filter-btn:active { transform: scale(.97); }
+.filter-btn.primary {
+  background: var(--primary);
+  color: var(--white);
+}
+.filter-btn.primary:hover { background: var(--primary-dark); }
+.filter-btn.secondary {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+.filter-btn.secondary:hover { background: var(--divider-bg); }
+
+/* Footer: hit count */
+.filter-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--divider-bg);
+  flex-shrink: 0;
+}
+.filter-hit-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.filter-hit-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  padding: 2px 8px;
+  background: var(--border-light);
+  border-radius: 10px;
+}
+.filter-hit-count.zero {
+  color: var(--red-accent);
+  background: #FEF2F2;
+}
+
+/* Right-click context menu */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  padding: 4px 0;
+  min-width: 140px;
+  display: none;
+}
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background .1s;
+}
+.context-menu-item:hover { background: var(--input-bg); }
+.context-menu-item .menu-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+}
+.context-menu-divider {
+  height: 1px;
+  background: var(--divider-bg);
+  margin: 4px 0;
+}
+
+/* Panel section —hidden unless active (display defaults to subclass: flex/block) */
+.panel-section {
+  padding: 12px;
+  min-height: 100%;
+}
+.panel-section:not(.active) {
+  display: none;
+}
+
+.property-section {
+  padding: 0;
+}
+.property-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin-bottom: 10px;
+  line-height: 1.3;
+}
+.prop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+}
+.prop-label {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.prop-value {
+  flex: 1;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--primary-dark);
+}
+
+/* ===== Multi-selection Property Cards (框选多要素属性卡) ===== */
+.prop-selection-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 0 0 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--divider-bg);
+}
+
+.prop-cards-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+/* always single-column —cols-2 class is no longer applied */
+
+.property-card {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+
+.property-card.picked-card {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(70,130,245,.15);
+}
+.property-card.focused-card {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(30,64,175,.35);
+  background: rgba(59,130,246,.06);
+  cursor: pointer;
+}
+.property-card {
+  cursor: pointer;
+}
+
+.property-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg-main);
+  border-bottom: 1px solid var(--divider-bg);
+}
+
+.property-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.property-card-type {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--primary);
+  background: var(--border-light);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.property-card-idx {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.property-card-body {
+  padding: 6px 10px;
+}
+
+.property-card .prop-row {
+  height: 22px;
+}
+
+.property-card .prop-label {
+  font-size: 11px;
+  width: 60px;
+}
+
+.property-card .prop-value {
+  font-size: 11px;
+}
+
+/* ===== Responsive scaling wrapper ===== */
+.viewport-wrapper {
+  display: grid;
+  grid-template-rows: 48px 1fr 40px 32px;
+  grid-template-columns: 1fr;
+  width: 1440px;
+  height: 900px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  overflow: hidden;
+}
+.scale-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #1E40AF;
+}
+
+/* ===== SVG icon sizing helpers ===== */
+svg { flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <clipPath id="clip-circle" clipPathUnits="objectBoundingBox">
+      <circle cx="0.5" cy="0.5" r="0.5"/>
+    </clipPath>
+    <clipPath id="clip-diamond" clipPathUnits="objectBoundingBox">
+      <polygon points="0.5,0 1,0.5 0.5,1 0,0.5"/>
+    </clipPath>
+    <clipPath id="clip-square" clipPathUnits="objectBoundingBox">
+      <rect x="0" y="0" width="1" height="1" rx="0.04" ry="0.04"/>
+    </clipPath>
+    <clipPath id="clip-triangle" clipPathUnits="objectBoundingBox">
+      <polygon points="0.5,0 1,1 0,1"/>
+    </clipPath>
+    <clipPath id="clip-pin" clipPathUnits="objectBoundingBox">
+      <path d="M 0.5,0.08 C 0.28,0.08 0.12,0.25 0.12,0.46 C 0.12,0.72 0.5,1 0.5,1 C 0.5,1 0.88,0.72 0.88,0.46 C 0.88,0.25 0.72,0.08 0.5,0.08 Z"/>
+    </clipPath>
+  </defs>
+</svg>
+
+<div class="scale-container" id="scaleContainer">
+<div class="viewport-wrapper" id="viewport">
+
+<!-- ==================== TOPBAR (顶栏) ==================== -->
+<header class="topbar">
+  <div class="logo">WebGIS demo</div>
+
+</header>
+
+<!-- ==================== MAIN CONTENT AREA (主内容区) ==================== -->
+<main class="main-area">
+
+  <!-- ===== LAYER PANEL (左面板 图层) ===== -->
+  <aside class="layer-panel">
+    <!-- Panel Header -->
+    <div class="panel-header">
+      <h2>图层面板</h2>
+      <button class="header-icon-btn" title="从服务器加载图层" id="btnLoadRemote" onclick="loadRemoteLayers()">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="panel-collapse-btn" title="收缩图层面板" onclick="toggleLayerPanel()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Collapsed state header -->
+    <div class="panel-collapsed-header">
+      <button class="panel-collapse-btn" title="展开图层面板" onclick="toggleLayerPanel()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Layer List Scroll Area -->
+    <div class="layer-scroll">
+
+      <!-- Group 1: 基础底图 -->
+      <div class="group-header" onclick="toggleGroup(this)">
+        <span class="group-arrow">▼</span>
+        <span class="group-name">基础底图</span>
+        <span class="group-count">2</span>
+      </div>
+      <div class="layer-group-body">
+        <div class="layer-item active" data-layer="basemap-street">
+          <div class="checkbox checked"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="layer-item-name">basemap-street</span>
+          <span class="layer-opacity readonly">100%</span>
+        </div>
+        <div class="layer-item inactive" data-layer="basemap-hillshade">
+          <div class="checkbox"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="layer-item-name">basemap-hillshade</span>
+          <span class="layer-opacity readonly">100%</span>
+        </div>
+      </div>
+
+      <!-- Group 2: 业务图层 -->
+      <div class="group-header" id="businessGroupHeader" onclick="toggleGroup(this)">
+        <span class="group-arrow">▼</span>
+        <span class="group-name">业务图层</span>
+        <span class="group-count" id="businessGroupCount">2</span>
+      </div>
+      <div class="layer-group-body" id="businessGroupBody">
+        <div class="layer-item active" data-layer="admin">
+          <div class="checkbox checked"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="layer-item-name">admin</span>
+          <span class="layer-count-badge" data-count-layer="admin"></span>
+          <span class="layer-opacity">100%</span>
+        </div>
+        <div class="layer-item active" data-layer="poi">
+          <div class="checkbox checked"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <span class="layer-item-name">poi</span>
+          <span class="layer-count-badge" data-count-layer="poi"></span>
+          <span class="layer-opacity">100%</span>
+        </div>
+      </div>
+
+    </div><!-- /.layer-scroll -->
+
+    <!-- Legend config popover (used by gear in layer items) -->
+    <div class="legend-config" id="legendConfigPopover">
+      <button class="legend-config-close" onclick="event.stopPropagation();closeLegendConfig();">✕</button>
+      <label>形状</label>
+      <div class="legend-config-row" id="cfgShape"></div>
+      <label>颜色</label>
+      <div class="legend-config-row" id="cfgColor"></div>
+
+      <label>数值属性映射<span style="font-weight:400;color:var(--text-muted);font-size:9px;">（映射到符号大小）</span></label>
+      <select id="cfgSizeProp" onchange="onLegendSizeProp(this.value)" style="width:100%;height:24px;font-size:11px;border:1px solid var(--divider-bg);border-radius:4px;margin-bottom:4px;background:#fff;">
+        <option value="">不映射</option>
+      </select>
+      <div id="cfgSizeRange" style="display:none;">
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span style="font-size:10px;color:var(--text-muted);">最小</span>
+          <input type="number" id="cfgSizeMin" min="4" max="40" value="6" onchange="onLegendSizeRange()" style="width:48px;height:22px;font-size:11px;border:1px solid var(--divider-bg);border-radius:3px;text-align:center;">
+          <span style="font-size:10px;color:var(--text-muted);">最大</span>
+          <input type="number" id="cfgSizeMax" min="4" max="40" value="24" onchange="onLegendSizeRange()" style="width:48px;height:22px;font-size:11px;border:1px solid var(--divider-bg);border-radius:3px;text-align:center;">
+        </div>
+      </div>
+
+      <label>分类属性映射<span style="font-weight:400;color:var(--text-muted);font-size:9px;">（字符型 → 形状/颜色）</span></label>
+      <select id="cfgCatProp" onchange="onLegendCatProp(this.value)" style="width:100%;height:24px;font-size:11px;border:1px solid var(--divider-bg);border-radius:4px;margin-bottom:4px;background:#fff;">
+        <option value="">不映射</option>
+      </select>
+      <div id="cfgCatTypeRow" style="display:none;">
+        <div style="display:flex;gap:4px;margin-bottom:6px;">
+          <button class="legend-cat-type-btn active" data-cat-type="shape" onclick="onLegendCatType('shape')" style="flex:1;height:22px;font-size:10px;border:1px solid var(--divider-bg);border-radius:3px;background:#fff;cursor:pointer;">映射形状</button>
+          <button class="legend-cat-type-btn" data-cat-type="color" onclick="onLegendCatType('color')" style="flex:1;height:22px;font-size:10px;border:1px solid var(--divider-bg);border-radius:3px;background:#fff;cursor:pointer;">映射颜色</button>
+        </div>
+        <div id="cfgCatValues" style="max-height:120px;overflow-y:auto;"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAP CANVAS (地图画布) ===== -->
+  <section class="map-canvas" id="mapCanvas">
+    <div class="selection-box" id="selectionBox" style="display:none;"></div>
+    <!-- ===== Pannable map layer ===== -->
+    <div class="map-inner" id="mapInner">
+      <div class="map-grid" data-layer="basemap-street"></div>
+
+      
+
+      <!-- Map markers and overlays (positioned via % for responsive) -->
+      <div class="poi-marker" style="left:62.2%; top:33.3%;" data-layer="poi" data-props='{"位点":"国贸CBD","时段":"早高峰","RAI":85,"lon":116.43,"lat":39.90}'></div>
+      <div class="poi-marker" style="left:40.0%; top:20.0%;" data-layer="poi" data-props='{"位点":"中关村","时段":"午间","RAI":52,"lon":116.33,"lat":39.96}'></div>
+      <div class="poi-marker" style="left:71.1%; top:13.3%;" data-layer="poi" data-props='{"位点":"望京SOHO","时段":"晚高峰","RAI":93,"lon":116.47,"lat":39.99}'></div>
+      <div class="poi-marker" style="left:77.8%; top:57.8%;" data-layer="poi" data-props='{"位点":"亦庄开发区","时段":"夜间","RAI":28,"lon":116.50,"lat":39.79}'></div>
+      <div class="poi-marker" style="left:66.7%; top:37.8%;" data-layer="poi" data-props='{"位点":"三里屯","时段":"晚高峰","RAI":71,"lon":116.45,"lat":39.88}'></div>
+
+      <div class="poi-marker poi-selected" style="left:46.1%; top:53.8%" data-layer="admin" data-props='{"name":"朝阳区","类型":"行政区划","行政编码":"110105","面积":"470.8 km²","人口":"3,452,000","GDP":"¥ 7,561 亿"}'></div>
+
+      <div class="region-outline" style="left:42.1%; top:48.7%; width:15.8%; height:10.3%" data-layer="admin"></div>
+      <div class="map-label" style="left:49%; top:51.6%" data-layer="admin">朝阳区</div>
+    </div><!-- /#mapInner -->
+
+    <!-- ===== Fixed overlays (not panned) ===== -->
+    <!-- Map toolbar -->
+    <div class="map-toolbar">
+      <button class="toolbar-btn" title="选择工具">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 2l14 6-6 2-2 6L4 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="toolbar-btn active" title="框选工具">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="2" width="14" height="14" rx="1" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
+      </button>
+      <button class="toolbar-btn" title="测距工具">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 17L17 3M7 3h10v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Zoom control -->
+    <div class="zoom-control">
+      <button class="zoom-btn" onclick="zoomIn()" title="放大">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <div class="zoom-divider"></div>
+      <button class="zoom-btn" onclick="zoomOut()" title="缩小">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <!-- Scale bar -->
+    <div class="scale-bar">
+      <div class="scale-line"></div>
+      <span class="scale-text">2 km</span>
+    </div>
+
+    <!-- North arrow -->
+    <div class="north-arrow">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M14 2l-3 10h6L14 2z" fill="#EF4444"/>
+        <path d="M14 2l3 10h-6L14 2z" fill="#475569"/>
+        <path d="M14 12v14" stroke="#475569" stroke-width="1.2"/>
+        <text x="14" y="7" text-anchor="middle" font-size="6" font-weight="700" fill="white">N</text>
+      </svg>
+    </div>
+
+    <!-- Attribution -->
+    <div class="attribution">&copy; ArcGIS | MapLibre | OSM</div>
+  </section>
+
+  <!-- ===== RIGHT DRAWER (右抽屉 属性详情) ===== -->
+  <aside class="right-drawer">
+    <div class="drawer-header">
+      <h2>属性详情</h2>
+      <button class="drawer-collapse-btn" title="收缩属性面板" onclick="toggleDrawer()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+
+    <div class="drawer-content">
+      <!-- ===== Row 1: Upper tabs ===== -->
+      <button class="content-tab active" data-group="upper" onclick="switchTab(event, 'tab-filter', 'upper')">筛选</button>
+      <button class="content-tab" data-group="upper" onclick="switchTab(event, 'tab-search', 'upper')">搜索</button>
+
+      <!-- ===== Row 2: Upper content panel ===== -->
+      <div class="content-panel" id="content-upper">
+        <div class="panel-section filter-section active" id="tab-filter">
+          <div class="section-title">筛选</div>
+          <div class="filter-section-header">
+            <label>目标图层</label>
+            <select class="filter-layer-picker" id="filterLayerPicker" onchange="switchFilterLayer()">
+              <option value="poi">POI 点位</option>
+              <option value="admin">行政区划</option>
+            </select>
+          </div>
+
+          <div class="filter-clauses" id="filterClauses">
+            <!-- dynamically populated -->
+          </div>
+
+          <div class="filter-combinator" id="filterCombinator" style="display:none;">
+            <div class="filter-combinator-line"></div>
+            <button class="filter-combinator-toggle" id="combinatorToggle" onclick="toggleCombinator()">AND</button>
+            <div class="filter-combinator-line"></div>
+          </div>
+
+          <div class="filter-actions">
+            <button class="filter-btn secondary" onclick="addFilterClause()">+ 添加条件</button>
+            <button class="filter-btn secondary" onclick="clearAllFilters()" style="flex:.6;">清除</button>
+          </div>
+
+          <div class="filter-footer">
+            <span class="filter-hit-label">命中要素</span>
+            <span class="filter-hit-count" id="filterHitCount">5 / 5</span>
+          </div>
+        </div>
+
+        <div class="panel-section search-section" id="tab-search">
+          <div class="section-title">搜索</div>
+          <div class="search-input-wrap">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="#959BA8" stroke-width="1.2"/><path d="M9.5 9.5L12 12" stroke="#959BA8" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <input class="search-input" id="searchInput" type="text" placeholder="搜索点位、行政区划..." oninput="doSearch(this.value)" />
+          </div>
+          <div class="search-results" id="searchResults">
+            <div class="search-empty">输入关键词开始搜索</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Row 3: Lower tabs ===== -->
+      <button class="content-tab active" data-group="lower" onclick="switchTab(event, 'tab-prop', 'lower')">属性</button>
+      <button class="content-tab" data-group="lower" onclick="switchTab(event, 'tab-analysis', 'lower')">分析</button>
+
+      <!-- ===== Row 4: Lower content panel ===== -->
+      <div class="content-panel" id="content-lower">
+        <div class="panel-section property-section active" id="tab-prop">
+          <div class="section-title">属性</div>
+          <div class="property-title">朝阳区 — 行政区划</div>
+          <div class="prop-row"><span class="prop-label">行政编码</span><span class="prop-value">110105</span></div>
+          <div class="prop-row"><span class="prop-label">面积</span><span class="prop-value">470.8 km&sup2;</span></div>
+          <div class="prop-row"><span class="prop-label">人口</span><span class="prop-value">3,452,000</span></div>
+          <div class="prop-row"><span class="prop-label">GDP</span><span class="prop-value">¥ 7,561 亿</span></div>
+        </div>
+
+        <div class="panel-section analysis-section" id="tab-analysis">
+          <div class="section-title">分析</div>
+          <div class="analysis-stat-grid">
+            <div class="analysis-stat-card">
+              <div class="analysis-stat-value">5</div>
+              <div class="analysis-stat-label">活跃图层</div>
+            </div>
+            <div class="analysis-stat-card">
+              <div class="analysis-stat-value">23</div>
+              <div class="analysis-stat-label">要素总数</div>
+            </div>
+            <div class="analysis-stat-card">
+              <div class="analysis-stat-value">3</div>
+              <div class="analysis-stat-label">筛选条件</div>
+            </div>
+            <div class="analysis-stat-card">
+              <div class="analysis-stat-value">4</div>
+              <div class="analysis-stat-label">已选要素</div>
+            </div>
+          </div>
+          <div class="analysis-chart-placeholder">图表区域 — 待开发</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+</main>
+
+<!-- ==================== BOTTOM BAR (底栏 状态栏) ==================== -->
+<footer class="bottombar">
+  <span class="status-text status-mono" id="coordDisplay">39.9042° N, 116.4074° E</span>
+  <span class="status-text status-medium">缩放级别: 12</span>
+  <span class="status-text">4 个图层已激活</span>
+</footer>
+
+<!-- ==================== TIMELINE PANEL (时间轴面板) ==================== -->
+<footer class="timeline-panel" id="timelinePanel">
+  <label class="timeline-enable-toggle" title="启用/禁用时间轴功能">
+    <input type="checkbox" id="timelineEnable" onchange="toggleTimelineEnabled()">
+    <span>启用时间轴</span>
+  </label>
+
+  <span class="time-field-label">时间字段：</span>
+
+  <select class="time-field-picker" id="timeFieldPicker" onchange="onTimeFieldChange(this.value)" title="选择时间字段">
+    <option value="">—</option>
+  </select>
+
+  <div class="speed-selector" id="speedSelector">
+    <button class="speed-btn" data-speed="0.5" onclick="setPlaybackSpeed(0.5, this)">0.5×</button>
+    <button class="speed-btn active" data-speed="1" onclick="setPlaybackSpeed(1, this)">1×</button>
+    <button class="speed-btn" data-speed="2" onclick="setPlaybackSpeed(2, this)">2×</button>
+    <button class="speed-btn" data-speed="4" onclick="setPlaybackSpeed(4, this)">4×</button>
+    <button class="speed-btn" data-speed="8" onclick="setPlaybackSpeed(8, this)">8×</button>
+  </div>
+
+  <button class="play-btn" id="playBtn" onclick="togglePlay()">
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+  </button>
+
+  <div class="time-slider-track" id="timeTrack">
+    <div class="time-slider-fill" id="timeFill"></div>
+    <div class="time-slider-thumb" id="timeThumb"></div>
+  </div>
+
+  <span class="time-label">2024-01-01 00:00</span>
+  <span class="time-label current">2024-06-15 14:32</span>
+  <span class="time-label">2024-12-31 23:59</span>
+</footer>
+
+</div><!-- /.viewport-wrapper -->
+</div><!-- /.scale-container -->
+
+<!-- ===== Context Menu (右键菜单-快捷筛选) ===== -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" onclick="quickFilterFromMenu('eq')">
+    <svg class="menu-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7l3 3 5-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>按字段值筛选</span>
+  </div>
+  <div class="context-menu-item" onclick="quickFilterFromMenu('neq')">
+    <svg class="menu-icon" width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <span>排除此值</span>
+  </div>
+</div>
+
+<!-- ==================== INTERACTION LOGIC ==================== -->
+<script>
+// --- Toggle left layer panel collapse ---
+var layerCollapsed = false;
+function toggleLayerPanel() {
+  layerCollapsed = !layerCollapsed;
+  var panel = document.querySelector('.layer-panel');
+  if (layerCollapsed) {
+    panel.classList.add('collapsed');
+  } else {
+    panel.classList.remove('collapsed');
+  }
+}
+
+// --- Toggle right drawer collapse ---
+var drawerCollapsed = false;
+function toggleDrawer() {
+  drawerCollapsed = !drawerCollapsed;
+  var drawer = document.querySelector('.right-drawer');
+  if (drawerCollapsed) {
+    drawer.classList.add('collapsed');
+  } else {
+    drawer.classList.remove('collapsed');
+  }
+}
+
+// --- Toggle layer group collapse ---
+function toggleGroup(el) {
+  const body = el.nextElementSibling;
+  if (!body || !body.classList.contains('layer-group-body')) return;
+  el.classList.toggle('collapsed');
+  body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+// --- Opacity drag (长按左右滑动调透明度) ---
+var opacityDrag = { active: false, el: null, layerId: '', startX: 0, startVal: 0 };
+
+function clampOpacity(v) {
+  return Math.max(0, Math.min(100, Math.round(v / 5) * 5));
+}
+
+// Apply opacity to all map elements belonging to a layer
+function applyLayerOpacity(layerId, opacity) {
+  var elements = document.querySelectorAll('.map-canvas [data-layer="' + layerId + '"]');
+  elements.forEach(function(el) {
+    el.style.opacity = (opacity / 100).toFixed(2);
+  });
+}
+
+document.querySelectorAll('.layer-opacity:not(.readonly)').forEach(function(el) {
+  el.addEventListener('mousedown', function(e) {
+    e.preventDefault();
+    var layerItem = el.closest('.layer-item');
+    opacityDrag.active = true;
+    opacityDrag.el = el;
+    opacityDrag.layerId = layerItem ? layerItem.getAttribute('data-layer') : '';
+    opacityDrag.startX = e.clientX;
+    opacityDrag.startVal = parseInt(el.textContent);
+    el.classList.add('dragging');
+  });
+
+  el.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    var t = e.touches[0];
+    var layerItem = el.closest('.layer-item');
+    opacityDrag.active = true;
+    opacityDrag.el = el;
+    opacityDrag.layerId = layerItem ? layerItem.getAttribute('data-layer') : '';
+    opacityDrag.startX = t.clientX;
+    opacityDrag.startVal = parseInt(el.textContent);
+    el.classList.add('dragging');
+  }, { passive: false });
+});
+
+document.addEventListener('mousemove', function(e) {
+  if (!opacityDrag.active) return;
+  var dx = e.clientX - opacityDrag.startX;
+  var newVal = clampOpacity(opacityDrag.startVal + dx);
+  opacityDrag.el.textContent = newVal + '%';
+  opacityDrag.el.style.setProperty('--opacity-pct', newVal + '%');
+  opacityDrag.el.style.setProperty('--drag-bar-w', (newVal) + '%');
+  var w = (newVal / 100) * (opacityDrag.el.offsetWidth - 4);
+  opacityDrag.el.style.setProperty('--bar-w', w + 'px');
+  // Apply opacity to map elements
+  if (opacityDrag.layerId) {
+    applyLayerOpacity(opacityDrag.layerId, newVal);
+  }
+});
+
+document.addEventListener('mouseup', function() {
+  if (!opacityDrag.active) return;
+  opacityDrag.el.classList.remove('dragging');
+  opacityDrag.active = false;
+  opacityDrag.el = null;
+  opacityDrag.layerId = '';
+});
+
+document.addEventListener('touchmove', function(e) {
+  if (!opacityDrag.active) return;
+  var t = e.touches[0];
+  var dx = t.clientX - opacityDrag.startX;
+  var newVal = clampOpacity(opacityDrag.startVal + dx);
+  opacityDrag.el.textContent = newVal + '%';
+  // Apply opacity to map elements
+  if (opacityDrag.layerId) {
+    applyLayerOpacity(opacityDrag.layerId, newVal);
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', function() {
+  if (!opacityDrag.active) return;
+  opacityDrag.el.classList.remove('dragging');
+  opacityDrag.active = false;
+  opacityDrag.el = null;
+  opacityDrag.layerId = '';
+});
+// --- Checkbox toggle (统一选中框 + 图层显隐) ---
+document.querySelectorAll('.checkbox').forEach(function(cb) {
+  cb.addEventListener('click', function(e) {
+    e.stopPropagation();
+    this.classList.toggle('checked');
+    var item = this.closest('.layer-item');
+    if (!item) return;
+    var layerId = item.getAttribute('data-layer');
+    if (this.classList.contains('checked')) {
+      item.classList.remove('inactive');
+      item.classList.add('active');
+      if (layerId) showLayer(layerId);
+    } else {
+      item.classList.remove('active');
+      item.classList.add('inactive');
+      if (layerId) hideLayer(layerId);
+    }
+    updateLayerCount();
+  });
+});
+
+// --- Layer visibility control (仅影响地图画布内的元素，不影响图层面板自身) ---
+function hideLayer(layerId) {
+  document.querySelectorAll('.map-canvas [data-layer="' + layerId + '"]').forEach(function(el) {
+    el.classList.add('layer-hidden');
+  });
+}
+function showLayer(layerId) {
+  document.querySelectorAll('.map-canvas [data-layer="' + layerId + '"]').forEach(function(el) {
+    el.classList.remove('layer-hidden');
+  });
+}
+
+// --- Update active layer count in status bar ---
+function updateLayerCount() {
+  var count = document.querySelectorAll('.layer-item.active .checkbox.checked').length;
+  var status = document.querySelector('.status-text:last-child');
+  if (status) status.textContent = count + ' 个图层已激活';
+}
+
+// ================================================================
+//  FIELD FILTER SYSTEM (字段筛选系统 · §3.8)
+// ================================================================
+
+// --- Dynamic field extraction per layer (从图层元素的 data-props 自动提取所有属性字段) ---
+var _fieldLabelMap = {
+  'name': '名称', '位点': '位点', '物种': '物种', '时间': '时间',
+  '类型': '类型', '评分': '评分', '严重程度': '严重程度', '地址': '地址',
+  '行政编码': '行政编码', '面积': '面积', '人口': '人口', 'GDP': 'GDP',
+  '时段': '时段', 'RAI': 'RAI',
+  'lon': '经度', 'lat': '纬度'
+};
+function getLayerFields(layerId) {
+  var elements = getLayerElements(layerId);
+  var fieldMap = {}; // key -> { hasNum, hasStr }
+  elements.forEach(function(el) {
+    var propsStr = el.getAttribute('data-props');
+    if (!propsStr) return;
+    try {
+      var props = JSON.parse(propsStr);
+      for (var key in props) {
+        if (!fieldMap[key]) {
+          fieldMap[key] = { hasNum: false, hasStr: false };
+        }
+        var val = props[key];
+        if (val === null || val === undefined || val === '') continue;
+        var num = parseFloat(String(val).replace(/[,，¥\s]/g, '').replace(/[^\d.-]/g, ''));
+        if (!isNaN(num) && String(val).replace(/[,，¥\s]/g, '').trim() !== '') {
+          fieldMap[key].hasNum = true;
+        } else {
+          fieldMap[key].hasStr = true;
+        }
+      }
+    } catch(e) {}
+  });
+  // Build sorted field list
+  var fields = [];
+  for (var key in fieldMap) {
+    var info = fieldMap[key];
+    var type = (info.hasNum && !info.hasStr) ? 'number' : 'string';
+    fields.push({ name: key, label: _fieldLabelMap[key] || key, type: type });
+  }
+  fields.sort(function(a, b) {
+    return a.label.localeCompare(b.label, 'zh-CN', { numeric: true });
+  });
+  return fields;
+}
+
+// --- Operators per field type ---
+var operatorsByType = {
+  'string': [
+    { key: 'eq', label: '等于' },
+    { key: 'neq', label: '不等于' },
+    { key: 'contains', label: '包含' },
+    { key: 'notContains', label: '不包含' },
+    { key: 'startsWith', label: '以...开头' },
+    { key: 'endsWith', label: '以...结尾' },
+    { key: 'isNull', label: '为空' },
+    { key: 'notNull', label: '不为空' }
+  ],
+  'number': [
+    { key: 'eq', label: '=' },
+    { key: 'neq', label: '\u2260' },
+    { key: 'gt', label: '>' },
+    { key: 'gte', label: '\u2265' },
+    { key: 'lt', label: '<' },
+    { key: 'lte', label: '\u2264' },
+    { key: 'between', label: '范围' }
+  ],
+  'date': [
+    { key: 'eq', label: '等于' },
+    { key: 'neq', label: '不等于' },
+    { key: 'before', label: '早于' },
+    { key: 'after', label: '晚于' },
+    { key: 'between', label: '范围' }
+  ]
+};
+
+// --- Filter state ---
+var currentFilterLayer = 'poi';
+var filterClauses = [];   // [{ id, field, operator, value, enabled }]
+var filterCombinator = 'AND';
+var clauseIdCounter = 0;
+var filterInitialized = false;
+
+// --- QUICK FILTER context (right-click) ---
+var quickFilterField = '';
+var quickFilterValue = '';
+
+// Get elements for the target layer
+function getLayerElements(layerId) {
+  return document.querySelectorAll('.map-canvas [data-layer="' + layerId + '"][data-props]');
+}
+
+// Get property value from element
+function getElProp(el, field) {
+  var propsStr = el.getAttribute('data-props');
+  if (!propsStr) return null;
+  try {
+    var props = JSON.parse(propsStr);
+    return props[field] !== undefined ? props[field] : (props['name'] === field ? props['name'] : null);
+  } catch(e) { return null; }
+}
+
+// Get distinct values for a field from current layer elements
+function getDistinctValues(layerId, field) {
+  var elements = getLayerElements(layerId);
+  var vals = [];
+  var seen = {};
+  elements.forEach(function(el) {
+    var v = getElProp(el, field);
+    if (v !== null && v !== undefined && v !== '') {
+      var key = String(v);
+      if (!seen[key]) {
+        seen[key] = true;
+        vals.push({ label: String(v), value: String(v) });
+      }
+    }
+  });
+  // Sort alphabetically
+  vals.sort(function(a, b) {
+    return a.label.localeCompare(b.label, 'zh-CN', { numeric: true });
+  });
+  return vals;
+}
+
+// Evaluate a single clause against a value
+function evalClause(clause, val) {
+  if (!clause.enabled) return true;
+  var op = clause.operator;
+
+  // isNull / notNull
+  if (op === 'isNull') return val === null || val === undefined || val === '';
+  if (op === 'notNull') return val !== null && val !== undefined && val !== '';
+
+  // val must exist for other ops
+  if (val === null || val === undefined || val === '') return false;
+
+  var strVal = String(val).trim();
+  var clauseVal = clause.value ? String(clause.value).trim() : '';
+  var numVal = parseFloat(strVal);
+  var numClauseVal = parseFloat(clauseVal);
+
+  switch (op) {
+    // String
+    case 'eq': return strVal === clauseVal;
+    case 'neq': return strVal !== clauseVal;
+    case 'contains': return strVal.toLowerCase().indexOf(clauseVal.toLowerCase()) !== -1;
+    case 'notContains': return strVal.toLowerCase().indexOf(clauseVal.toLowerCase()) === -1;
+    case 'startsWith': return strVal.toLowerCase().indexOf(clauseVal.toLowerCase()) === 0;
+    case 'endsWith': return strVal.toLowerCase().lastIndexOf(clauseVal.toLowerCase()) === strVal.length - clauseVal.length;
+    // Number
+    case 'gt': return !isNaN(numVal) && numVal > numClauseVal;
+    case 'gte': return !isNaN(numVal) && numVal >= numClauseVal;
+    case 'lt': return !isNaN(numVal) && numVal < numClauseVal;
+    case 'lte': return !isNaN(numVal) && numVal <= numClauseVal;
+    case 'between': {
+      var parts = clauseVal.split(',').map(parseFloat);
+      return !isNaN(numVal) && parts.length === 2 && numVal >= parts[0] && numVal <= parts[1];
+    }
+    // Date (simple string compare)
+    case 'before': return strVal < clauseVal;
+    case 'after': return strVal > clauseVal;
+    default: return true;
+  }
+}
+
+// Apply filters to map —show/hide elements based on current filter state
+function applyFilters() {
+  var elements = getLayerElements(currentFilterLayer);
+  var activeClauses = filterClauses.filter(function(c) { return c.enabled; });
+
+  var hitCount = 0;
+  elements.forEach(function(el) {
+    var match = true;
+    for (var i = 0; i < activeClauses.length; i++) {
+      var clause = activeClauses[i];
+      var val = getElProp(el, clause.field);
+      var clauseMatch = evalClause(clause, val);
+
+      if (filterCombinator === 'AND') {
+        if (!clauseMatch) { match = false; break; }
+      } else { // OR
+        if (clauseMatch) { match = true; break; }
+      }
+    }
+    // If no active clauses, show all
+    if (activeClauses.length === 0) match = true;
+    // OR mode: no clause matches means no match
+    if (filterCombinator === 'OR' && activeClauses.length > 0) {
+      var anyMatch = false;
+      for (var j = 0; j < activeClauses.length; j++) {
+        var c = activeClauses[j];
+        if (evalClause(c, getElProp(el, c.field))) { anyMatch = true; break; }
+      }
+      match = anyMatch;
+    }
+
+    if (match) {
+      el.classList.remove('filter-hidden');
+      hitCount++;
+    } else {
+      el.classList.add('filter-hidden');
+    }
+  });
+
+  // Update hit count display
+  var badge = document.getElementById('filterHitCount');
+  if (badge) {
+    badge.textContent = hitCount + ' / ' + elements.length;
+    if (hitCount === 0 && activeClauses.length > 0) {
+      badge.classList.add('zero');
+    } else {
+      badge.classList.remove('zero');
+    }
+  }
+
+  // Update layer filter badge
+  updateFilterBadge(currentFilterLayer, activeClauses.length);
+
+  return hitCount;
+}
+
+// Update filter badge on layer item
+function updateFilterBadge(layerId, count) {
+  var layerItem = document.querySelector('.layer-item[data-layer="' + layerId + '"]');
+  if (!layerItem) return;
+  var existing = layerItem.querySelector('.filter-badge');
+  if (count > 0) {
+    if (existing) {
+      existing.textContent = count;
+    } else {
+      var badge = document.createElement('span');
+      badge.className = 'filter-badge';
+      badge.textContent = count;
+      layerItem.appendChild(badge);
+    }
+  } else {
+    if (existing) existing.remove();
+  }
+}
+
+// Clear all filters
+function clearAllFilters() {
+  filterClauses = [];
+  clauseIdCounter = 0;
+  renderFilterPanel();
+  applyFilters();
+}
+
+// Toggle AND / OR combinator
+function toggleCombinator() {
+  filterCombinator = filterCombinator === 'AND' ? 'OR' : 'AND';
+  var tog = document.getElementById('combinatorToggle');
+  if (tog) tog.textContent = filterCombinator;
+  applyFilters();
+}
+
+// Switch filter target layer
+// Rebuild the filter layer picker to include all dynamic layers
+function rebuildFilterPicker() {
+  var picker = document.getElementById('filterLayerPicker');
+  if (!picker) return;
+  var currentVal = picker.value;
+  // Build options from _legendConfig
+  var html = '';
+  for (var id in _legendConfig) {
+    var cfg = _legendConfig[id];
+    var label = cfg.label || id;
+    var sel = (id === currentVal) ? ' selected' : '';
+    html += '<option value="' + id + '"' + sel + '>' + label + '</option>';
+  }
+  picker.innerHTML = html;
+}
+
+function switchFilterLayer() {
+  var picker = document.getElementById('filterLayerPicker');
+  if (!picker) return;
+  var newLayer = picker.value;
+  if (newLayer === currentFilterLayer) return;
+  // Clear filters from previous layer (remove filter-hidden)
+  var oldEls = getLayerElements(currentFilterLayer);
+  oldEls.forEach(function(el) { el.classList.remove('filter-hidden'); });
+  currentFilterLayer = newLayer;
+  filterClauses = [];
+  clauseIdCounter = 0;
+  renderFilterPanel();
+  applyFilters();
+}
+
+// Add a new filter clause
+function addFilterClause(field, operator, value) {
+  var fields = getLayerFields(currentFilterLayer);
+  if (fields.length === 0) return;
+  var defField = field || fields[0].name;
+  var fieldDef = fields.find(function(f) { return f.name === defField; }) || fields[0];
+  var ops = operatorsByType[fieldDef.type] || operatorsByType['string'];
+  var defOp = operator || ops[0].key;
+
+  filterClauses.push({
+    id: 'c' + (++clauseIdCounter),
+    field: defField,
+    operator: defOp,
+    value: value || '',
+    enabled: true
+  });
+  renderFilterPanel();
+  applyFilters();
+}
+
+// Remove a filter clause
+function removeFilterClause(id) {
+  filterClauses = filterClauses.filter(function(c) { return c.id !== id; });
+  renderFilterPanel();
+  applyFilters();
+}
+
+// Toggle clause enabled/disabled
+function toggleClauseEnabled(id) {
+  for (var i = 0; i < filterClauses.length; i++) {
+    if (filterClauses[i].id === id) {
+      filterClauses[i].enabled = !filterClauses[i].enabled;
+      break;
+    }
+  }
+  renderFilterPanel();
+  applyFilters();
+}
+
+// Update clause when user changes field/operator/value
+function updateClauseFromDOM(id) {
+  for (var i = 0; i < filterClauses.length; i++) {
+    if (filterClauses[i].id === id) {
+      var row = document.querySelector('.filter-clause[data-id="' + id + '"]');
+      if (!row) return;
+      var fieldSel = row.querySelector('.filter-field');
+      var opSel = row.querySelector('.filter-operator');
+      var valEl = row.querySelector('.filter-value');
+      var fieldChanged = (fieldSel && filterClauses[i].field !== fieldSel.value);
+      var opChanged = (opSel && filterClauses[i].operator !== opSel.value);
+      var isEqNeq = function(op) { return op === 'eq' || op === 'neq'; };
+      var widgetSwitch = opChanged && (isEqNeq(filterClauses[i].operator) !== isEqNeq(opSel.value));
+      if (fieldSel) filterClauses[i].field = fieldSel.value;
+      if (opSel) filterClauses[i].operator = opSel.value;
+      if (valEl) filterClauses[i].value = valEl.value;
+      // Rebuild if field changed (different fields have different operators/distinct values)
+      // or if operator switched between eq/neq and other types (select vs input widget)
+      if (fieldChanged || widgetSwitch) {
+        renderFilterPanel();
+      }
+      applyFilters();
+      return;
+    }
+  }
+}
+
+// Render the full filter panel
+function renderFilterPanel() {
+  var container = document.getElementById('filterClauses');
+  var combinator = document.getElementById('filterCombinator');
+  if (!container) return;
+
+  if (filterClauses.length === 0) {
+    container.innerHTML = '<div class="filter-empty-clauses"><svg class="empty-icon" width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="3" y="6" width="26" height="20" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M9 14h14M9 18h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><p>暂无筛选条件，点击下方按钮添加</p></div>';
+    if (combinator) combinator.style.display = 'none';
+    updateHitCountDisplay();
+    return;
+  }
+
+  if (combinator) combinator.style.display = 'flex';
+
+  var html = '';
+  for (var i = 0; i < filterClauses.length; i++) {
+    var c = filterClauses[i];
+    var fields = getLayerFields(currentFilterLayer);
+    var fd = fields.find(function(f) { return f.name === c.field; }) || fields[0];
+    if (!fd) continue;
+    var ops = operatorsByType[fd.type] || operatorsByType['string'];
+    var disabledClass = c.enabled ? '' : ' disabled';
+    var enableTitle = c.enabled ? '禁用条件' : '启用条件';
+    var enableIcon = c.enabled
+      ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="1.2"/><circle cx="6" cy="6" r="1" fill="currentColor"/></svg>'
+      : '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="1.2"/></svg>';
+
+    html += '<div class="filter-clause' + disabledClass + '" data-id="' + c.id + '">';
+    // Field select
+    html += '<select class="filter-field" onchange="updateClauseFromDOM(\'' + c.id + '\')">';
+    for (var j = 0; j < fields.length; j++) {
+      html += '<option value="' + fields[j].name + '"' + (fields[j].name === c.field ? ' selected' : '') + '>' + fields[j].label + '</option>';
+    }
+    html += '</select>';
+    // Operator select
+    html += '<select class="filter-operator" onchange="updateClauseFromDOM(\'' + c.id + '\')">';
+    for (var k = 0; k < ops.length; k++) {
+      html += '<option value="' + ops[k].key + '"' + (ops[k].key === c.operator ? ' selected' : '') + '>' + ops[k].label + '</option>';
+    }
+    html += '</select>';
+    // Value input (hidden for isNull/notNull)
+    var hideVal = (c.operator === 'isNull' || c.operator === 'notNull');
+    var isSelect = (c.operator === 'eq' || c.operator === 'neq');
+    if (isSelect) {
+      // dropdown with distinct values
+      var distinctVals = getDistinctValues(currentFilterLayer, c.field);
+      html += '<select class="filter-value" onchange="updateClauseFromDOM(\'' + c.id + '\')"' + (hideVal ? ' style="visibility:hidden;"' : '') + '>';
+      html += '<option value="">-- 选择 --</option>';
+      for (var dv = 0; dv < distinctVals.length; dv++) {
+        html += '<option value="' + escAttr(distinctVals[dv].value) + '"' + (distinctVals[dv].value === c.value ? ' selected' : '') + '>' + distinctVals[dv].label + '</option>';
+      }
+      html += '</select>';
+    } else {
+      var placeholder = (fd.type === 'number' && c.operator === 'between') ? 'min, max' : '输入值...';
+      html += '<input class="filter-value" type="text" placeholder="' + placeholder + '" value="' + escAttr(c.value || '') + '" oninput="updateClauseFromDOM(\'' + c.id + '\')"' + (hideVal ? ' style="visibility:hidden;"' : '') + '>';
+    }
+    // Actions
+    html += '<div class="filter-clause-actions">';
+    html += '<button class="filter-clause-btn enable" title="' + enableTitle + '" onclick="toggleClauseEnabled(\'' + c.id + '\')">' + enableIcon + '</button>';
+    html += '<button class="filter-clause-btn remove" title="删除条件" onclick="removeFilterClause(\'' + c.id + '\')"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>';
+    html += '</div></div>';
+  }
+  container.innerHTML = html;
+  updateHitCountDisplay();
+}
+
+function updateHitCountDisplay() {
+  // Called by applyFilters which already updates badge
+  var elements = getLayerElements(currentFilterLayer);
+  var activeClauses = filterClauses.filter(function(c) { return c.enabled; });
+  var badge = document.getElementById('filterHitCount');
+  if (!badge) return;
+
+  if (activeClauses.length === 0) {
+    badge.textContent = elements.length + ' / ' + elements.length;
+    badge.classList.remove('zero');
+    return;
+  }
+  // Trigger apply to get accurate count
+  applyFilters();
+}
+
+// Initialize filter panel on first open
+function initFilterPanel() {
+  if (!filterInitialized) {
+    filterInitialized = true;
+    renderFilterPanel();
+  }
+}
+
+// Escape HTML attribute
+function escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ================================================================
+//  QUICK FILTER FROM CONTEXT MENU (右键快捷筛选)
+// ================================================================
+
+// Show context menu on property rows
+var contextMenuTarget = null;
+document.addEventListener('contextmenu', function(e) {
+  var propRow = e.target.closest('.prop-row');
+  if (!propRow) {
+    hideContextMenu();
+    return;
+  }
+  e.preventDefault();
+  var label = propRow.querySelector('.prop-label');
+  var valueEl = propRow.querySelector('.prop-value');
+  if (!label || !valueEl) return;
+  quickFilterField = label.textContent.trim();
+  quickFilterValue = valueEl.textContent.trim();
+  contextMenuTarget = propRow;
+
+  var menu = document.getElementById('contextMenu');
+  if (menu) {
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    menu.style.display = 'block';
+  }
+});
+
+function hideContextMenu() {
+  var menu = document.getElementById('contextMenu');
+  if (menu) menu.style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.context-menu')) hideContextMenu();
+});
+
+function quickFilterFromMenu(operator) {
+  hideContextMenu();
+  if (!quickFilterField || quickFilterValue === undefined) return;
+  // Map field label back to field name
+  var fields = getLayerFields(currentFilterLayer);
+  var fieldName = '';
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].label === quickFilterField) { fieldName = fields[i].name; break; }
+  }
+  if (!fieldName) fieldName = quickFilterField;
+
+  // Switch to filter tab and add condition
+  // Activate filter tab + panel
+  activatePanelTab('tab-filter', 'upper');
+  var filterSection = document.getElementById('tab-filter');
+
+  // Switch to correct layer
+  // Determine which layer from the currently selected feature
+  // Default to poi; switch to admin if the selected feature is admin
+  var picker = document.getElementById('filterLayerPicker');
+  var selectedFeature = document.querySelector('.picked');
+  if (selectedFeature) {
+    var layer = selectedFeature.getAttribute('data-layer');
+    if (layer && layer !== currentFilterLayer && picker) {
+      picker.value = layer;
+      switchFilterLayer();
+    }
+  }
+
+  addFilterClause(fieldName, operator, quickFilterValue);
+}
+
+// --- CSS class for filter-hidden elements (added dynamically) ---
+(function() {
+  var style = document.createElement('style');
+  style.textContent = '.filter-hidden { display: none !important; }';
+  document.head.appendChild(style);
+})();
+
+// --- Search function ---
+function doSearch(query) {
+  var resultsContainer = document.getElementById('searchResults');
+  if (!resultsContainer) return;
+
+  if (!query || query.trim() === '') {
+    resultsContainer.innerHTML = '<div class="search-empty">输入关键词开始搜索</div>';
+    return;
+  }
+
+  var q = query.trim().toLowerCase();
+  var results = [];
+
+  // Search through all map elements with data-props
+  document.querySelectorAll('.map-canvas [data-props]').forEach(function(el) {
+    var propsStr = el.getAttribute('data-props');
+    if (!propsStr) return;
+    try {
+      var props = JSON.parse(propsStr);
+      var name = (props['name'] || props['名称'] || '').toLowerCase();
+      var type = (props['类型'] || '').toLowerCase();
+      var layer = el.getAttribute('data-layer') || '';
+
+      var match = false;
+      var matchedKey = '';
+      var matchedValue = '';
+      // Also search all property values
+      for (var key in props) {
+        if (String(props[key]).toLowerCase().indexOf(q) >= 0) {
+          match = true;
+          matchedKey = key;
+          matchedValue = props[key];
+          break;
+        }
+      }
+
+      if (match) {
+        // Use name/名称 as primary label; fallback to first prop value
+        var displayName = props['name'] || props['名称'] || '';
+        if (!displayName) {
+          var keys = Object.keys(props);
+          displayName = keys.length > 0 ? String(props[keys[0]]) : '未命名';
+        }
+        results.push({ name: displayName, layer: layer, matchedKey: matchedKey, matchedValue: matchedValue, el: el });
+      }
+    } catch(e) {}
+  });
+
+  if (results.length === 0) {
+    resultsContainer.innerHTML = '<div class="search-empty">未找到匹配结果</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    html += '<div class="search-result-item" onclick="searchResultClick(this)" data-result-idx="' + i + '" data-el-ref="' + i + '">';
+    html += '<span class="search-result-name">' + r.name + '</span>';
+    if (r.matchedValue) {
+      html += '<span class="search-result-match">' + r.matchedKey + '：' + r.matchedValue + '</span>';
+    }
+    html += '<span class="search-result-layer">' + getLayerName(r.layer) + '</span>';
+    html += '</div>';
+  }
+  resultsContainer.innerHTML = html;
+
+  // Store results for click handler
+  window._searchResults = results;
+}
+
+function searchResultClick(item) {
+  var idx = parseInt(item.getAttribute('data-result-idx'));
+  var results = window._searchResults;
+  if (!results || !results[idx]) return;
+  selectFeature(results[idx].el);
+}
+
+// --- Helper: activate a panel tab + its content section ---
+function activatePanelTab(tabId, panelGroup) {
+  // Deactivate all content-tabs in this group
+  document.querySelectorAll('.content-tab[data-group="' + panelGroup + '"]').forEach(function(t) { t.classList.remove('active'); });
+  // Activate the target tab
+  var tab = document.querySelector('.content-tab[data-group="' + panelGroup + '"][onclick*="' + tabId + '"]');
+  if (tab) tab.classList.add('active');
+
+  // Show the target panel section, hide siblings
+  var panelId = panelGroup === 'upper' ? 'content-upper' : 'content-lower';
+  var panel = document.getElementById(panelId);
+  if (panel) {
+    panel.querySelectorAll('.panel-section').forEach(function(s) { s.classList.remove('active'); });
+    var target = document.getElementById(tabId);
+    if (target) target.classList.add('active');
+  }
+}
+
+// --- Tab switching (user click on content-tab buttons) ---
+function switchTab(e, tabId, panelGroup) {
+  activatePanelTab(tabId, panelGroup);
+  // On filter tab, initialize if empty
+  if (tabId === 'tab-filter') initFilterPanel();
+}
+
+// --- Toolbar active state ---
+var currentTool = 'box-select'; // 'select' | 'box-select' | 'measure'
+var toolLabels = { 'select': '选择工具', 'box-select': '框选工具', 'measure': '测距工具' };
+
+document.querySelectorAll('.toolbar-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.toolbar-btn').forEach(function(b) { b.classList.remove('active'); });
+    this.classList.add('active');
+    var title = this.getAttribute('title');
+    if (title === toolLabels['select']) currentTool = 'select';
+    else if (title === toolLabels['box-select']) currentTool = 'box-select';
+    else if (title === toolLabels['measure']) currentTool = 'measure';
+  });
+});
+
+// --- Zoom ---
+var zoomLevel = 12;
+var mapScale = 1;
+
+function zoomIn() {
+  zoomLevel = Math.min(zoomLevel + 1, 21);
+  zoomToLevel(zoomLevel);
+}
+function zoomOut() {
+  zoomLevel = Math.max(zoomLevel - 1, 1);
+  zoomToLevel(zoomLevel);
+}
+
+// Zoom-to-center: keep the visual center point fixed when scale changes
+function zoomToLevel(level) {
+  var newScale = Math.pow(1.3, level - 12);
+  var oldScale = mapScale;
+  if (oldScale === newScale) return;
+
+  // Adjust pan so the center of the map canvas stays at the same inner coordinate
+  var canvas = document.getElementById('mapCanvas');
+  var rect = canvas.getBoundingClientRect();
+  var cw = rect.width;
+  var ch = rect.height;
+  var vs = getViewportScale(); // viewport-level scale
+
+  // Inner coordinates of the canvas center before zoom
+  var ix = (cw / vs / 2 - panX) / oldScale;
+  var iy = (ch / vs / 2 - panY) / oldScale;
+
+  // After zoom, recompute pan to keep that same inner point at canvas center
+  panX = cw / vs / 2 - ix * newScale;
+  panY = ch / vs / 2 - iy * newScale;
+
+  mapScale = newScale;
+  document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
+  applyMapTransform();
+}
+
+// --- Double-click layer →focus & fit zoom ---
+function focusOnLayer(layerId) {
+  var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"]');
+  if (!els.length) return;
+
+  var canvas = document.getElementById('mapCanvas');
+  var canvasRect = canvas.getBoundingClientRect();
+  var vs = getViewportScale();
+
+  // Compute bounding box of all visible elements in screen coordinates
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  els.forEach(function(el) {
+    var r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return;
+    minX = Math.min(minX, r.left);
+    minY = Math.min(minY, r.top);
+    maxX = Math.max(maxX, r.right);
+    maxY = Math.max(maxY, r.bottom);
+  });
+  if (!isFinite(minX)) return;
+
+  // Fit bounding box within canvas with 15% padding on each side
+  var pad = 0.15;
+  var bbW = maxX - minX;
+  var bbH = maxY - minY;
+  var targetW = canvasRect.width * (1 - 2 * pad) / vs;
+  var targetH = canvasRect.height * (1 - 2 * pad) / vs;
+  var bbW_inner = bbW / vs / mapScale;
+  var bbH_inner = bbH / vs / mapScale;
+
+  var fitScale = Math.min(targetW / bbW_inner, targetH / bbH_inner);
+
+  // Snap to nearest zoom level
+  var nearestLevel = Math.round(Math.log(fitScale) / Math.log(1.3) + 12);
+  nearestLevel = Math.max(1, Math.min(21, nearestLevel));
+  var newScale = Math.pow(1.3, nearestLevel - 12);
+
+  // Inner coordinate of bounding box center
+  var bbCx = (minX + maxX) / 2;
+  var bbCy = (minY + maxY) / 2;
+  var ix = ((bbCx - canvasRect.left) / vs - panX) / mapScale;
+  var iy = ((bbCy - canvasRect.top) / vs - panY) / mapScale;
+
+  // Compute pan so this inner point maps to canvas center
+  var canvasCx_v = canvasRect.width / vs / 2;
+  var canvasCy_v = canvasRect.height / vs / 2;
+
+  panX = canvasCx_v - ix * newScale;
+  panY = canvasCy_v - iy * newScale;
+  mapScale = newScale;
+  zoomLevel = nearestLevel;
+
+  document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
+  applyMapTransform();
+}
+
+// Attach double-click to layer items
+document.querySelectorAll('.layer-item').forEach(function(item) {
+  item.addEventListener('dblclick', function(e) {
+    var layerId = this.getAttribute('data-layer');
+    if (!layerId) return;
+    // Focus + fit zoom
+    focusOnLayer(layerId);
+    // Select all elements with data-props in this layer
+    var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"][data-props]');
+    if (els.length > 0) {
+      renderMultiProperty(Array.from(els));
+    }
+  });
+});
+
+// Attach click to layer items for highlighting
+document.querySelectorAll('.layer-item').forEach(function(item) {
+  item.addEventListener('click', function(e) {
+    // If a marquee selection just completed, suppress the single-click handler
+    // so it doesn't undo the multi-layer selection.
+    if (_marquee && _marquee._suppressClick) return;
+    var layerId = this.getAttribute('data-layer');
+    if (!layerId) return;
+    // Only highlight business layers (exclude basemap layers with no legend config)
+    if (_legendConfig[layerId]) {
+      toggleLayerHighlight(layerId, e);
+    }
+  });
+});
+
+// ╔═══ Layer marquee (框选) system ═══╗
+// Drag-to-select: any mousedown on layer-scroll (except on controls) starts tracking.
+// If the mouse moves ≥?px, a marquee rectangle appears and text selection is suppressed.
+// On mouseup, all business layers intersecting the rectangle are added to the selection.
+var _marquee = { active: false, tracking: false, startX: 0, startY: 0, el: null, scrollEl: null };
+var MARQUEE_THRESHOLD = 5; // px distance before marquee activates
+
+(function initLayerMarquee() {
+  var scrollEl = document.querySelector('.layer-scroll');
+  if (!scrollEl) return;
+  var marqueeEl = document.createElement('div');
+  marqueeEl.className = 'layer-marquee';
+  document.body.appendChild(marqueeEl);
+  _marquee.scrollEl = scrollEl;
+  _marquee.el = marqueeEl;
+
+  // Only block marquee on interactive controls (checkbox, gear, drag handle, toggle,
+  // opacity slider, filter badge, group header).  Layer items themselves are NOT
+  // excluded —dragging on them starts the marquee; a plain click still reaches their
+  // own click handler as usual.
+  function isControl(t) {
+    while (t && t !== scrollEl) {
+      if (t.classList && (t.classList.contains('checkbox') ||
+          t.classList.contains('layer-gear') || t.classList.contains('layer-drag-handle') ||
+          t.classList.contains('layer-toggle') || t.classList.contains('layer-opacity') ||
+          t.classList.contains('filter-badge') || t.classList.contains('layer-swatch-inline') ||
+          t.closest('.group-header'))) {
+        return true;
+      }
+      t = t.parentElement;
+    }
+    return false;
+  }
+
+  scrollEl.addEventListener('mousedown', function(e) {
+    if (isControl(e.target)) return;
+    _marquee.tracking = true;
+    _marquee.startX = e.clientX;
+    _marquee.startY = e.clientY;
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!_marquee.tracking) return;
+    var dx = e.clientX - _marquee.startX;
+    var dy = e.clientY - _marquee.startY;
+    if (!_marquee.active && Math.abs(dx) < MARQUEE_THRESHOLD && Math.abs(dy) < MARQUEE_THRESHOLD) return;
+
+    if (!_marquee.active) {
+      // Activate marquee —suppress text selection
+      _marquee.active = true;
+      document.body.style.userSelect = 'none';
+      marqueeEl.style.display = 'block';
+    }
+
+    var l = Math.min(_marquee.startX, e.clientX);
+    var t = Math.min(_marquee.startY, e.clientY);
+    var w = Math.abs(dx);
+    var h = Math.abs(dy);
+    marqueeEl.style.left = l + 'px';
+    marqueeEl.style.top = t + 'px';
+    marqueeEl.style.width = w + 'px';
+    marqueeEl.style.height = h + 'px';
+  });
+
+  document.addEventListener('mouseup', function(e) {
+    if (!_marquee.tracking) return;
+    var wasActive = _marquee.active;
+
+    // Capture the marquee rectangle BEFORE hiding it (display:none rect is all zeros)
+    var mr = wasActive ? marqueeEl.getBoundingClientRect() : null;
+
+    _marquee.tracking = false;
+    _marquee.active = false;
+    document.body.style.userSelect = '';
+    marqueeEl.style.display = 'none';
+
+    if (!wasActive || !mr) return; // pure click, let normal handlers fire
+
+    if (Math.abs(mr.width) < 6 && Math.abs(mr.height) < 6) {
+      // Tiny marquee —deselect all unless Ctrl held
+      if (!e.ctrlKey && !e.metaKey) _clearLayerSelection();
+      return;
+    }
+
+    // Ctrl+框选 = 追加，普通框选 = 替换
+    if (!e.ctrlKey && !e.metaKey) _clearLayerSelection();
+
+    var count = 0;
+    document.querySelectorAll('.layer-item').forEach(function(item) {
+      var id = item.getAttribute('data-layer');
+      if (!id || !_legendConfig[id]) return; // Only business layers
+      var ir = item.getBoundingClientRect();
+      if (ir.right > mr.left && ir.left < mr.right &&
+          ir.bottom > mr.top && ir.top < mr.bottom) {
+        _addLayerToSelection(id);
+        count++;
+      }
+    });
+
+    // Suppress the subsequent click event on layer-item —    // otherwise toggleLayerHighlight would undo the marquee selection.
+    if (count > 0) {
+      _marquee._suppressClick = true;
+      setTimeout(function() { _marquee._suppressClick = false; }, 20);
+    }
+  });
+})();
+
+// ╔═══ Layer drag-to-reorder system ═══╗
+var _layerDrag = { active: false, el: null, subEl: null, layerId: '', group: null, startY: 0, origY: 0, insertBefore: null };
+
+function initLayerDragHandles() {
+  // Remove existing handles first (idempotent)
+  document.querySelectorAll('.layer-drag-handle').forEach(function(h) { h.remove(); });
+
+  // Insert drag handle before checkbox in each layer-item
+  document.querySelectorAll('.layer-item').forEach(function(item) {
+    var handle = document.createElement('div');
+    handle.className = 'layer-drag-handle';
+    handle.title = '拖动排序';
+    handle.innerHTML = '<svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor"><circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/><circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/><circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/></svg>';
+
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var item = this.closest('.layer-item');
+      if (!item) return;
+      var group = item.closest('.layer-group-body');
+      if (!group) return;
+      var layerId = item.getAttribute('data-layer');
+      var subEl = document.getElementById('layer-sub-' + layerId);
+
+      _layerDrag.active = true;
+      _layerDrag.el = item;
+      _layerDrag.subEl = subEl;
+      _layerDrag.layerId = layerId;
+      _layerDrag.group = group;
+      _layerDrag.startY = e.clientY;
+      _layerDrag.origY = e.clientY;
+      _layerDrag.insertBefore = null;
+
+      item.classList.add('drag-ghost');
+      item.classList.add('dragging-active');
+      if (subEl) subEl.classList.add('dragging-sub');
+      this.classList.add('dragging');
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+    });
+
+    var cb = item.querySelector('.checkbox');
+    if (cb) { cb.parentNode.insertBefore(handle, cb); }
+    else { item.insertBefore(handle, item.firstChild); }
+  });
+}
+
+document.addEventListener('mousemove', function(e) {
+  if (!_layerDrag.active) return;
+  var dY = e.clientY - _layerDrag.startY;
+  var item = _layerDrag.el;
+  var group = _layerDrag.group;
+  var subEl = _layerDrag.subEl;
+
+  // Visual follow: translate both layer-item and sub-legends with cursor
+  item.style.transform = 'translateY(' + dY + 'px)';
+  item.style.transition = 'none';
+  if (subEl) {
+    subEl.style.transform = 'translateY(' + dY + 'px)';
+    subEl.style.transition = 'none';
+  }
+
+  // Collect all layer-item siblings (excluding sub-legends)
+  var allItems = Array.from(group.querySelectorAll(':scope > .layer-item'));
+  var others = allItems.filter(function(it) { return it !== item; });
+  if (others.length === 0) {
+    return;
+  }
+
+  // Get dragged item's visual center
+  var itemRect = item.getBoundingClientRect();
+  var itemMid = itemRect.top + itemRect.height / 2;
+
+  // Find insertion point: first sibling whose center is below dragged item
+  var bestBefore = null;
+  for (var i = 0; i < others.length; i++) {
+    var other = others[i];
+    var otherMid = other.getBoundingClientRect().top + other.getBoundingClientRect().height / 2;
+    if (itemMid < otherMid) { bestBefore = other; break; }
+  }
+
+  // ╔═══ Real-time DOM reorder ═══╗
+  var prevBefore = _layerDrag.insertBefore;
+  if (bestBefore !== prevBefore) {
+    _layerDrag.insertBefore = bestBefore;
+
+    // Record visual Y before DOM move
+    var visualYBefore = item.getBoundingClientRect().top;
+
+    // Move layer-item in DOM
+    if (bestBefore) {
+      group.insertBefore(item, bestBefore);
+    } else {
+      group.appendChild(item);
+    }
+
+    // Move sub-legends to immediately follow the layer-item
+    if (subEl && subEl.parentNode === group) {
+      if (item.nextElementSibling && item.nextElementSibling.classList.contains('layer-item')) {
+        group.insertBefore(subEl, item.nextElementSibling);
+      } else {
+        group.appendChild(subEl);
+      }
+    }
+
+    // Record visual Y after DOM move and compensate startY
+    var visualYAfter = item.getBoundingClientRect().top;
+    _layerDrag.startY += (visualYAfter - visualYBefore);
+
+    // Re-apply transform with compensated offset
+    dY = e.clientY - _layerDrag.startY;
+    item.style.transform = 'translateY(' + dY + 'px)';
+    if (subEl) subEl.style.transform = 'translateY(' + dY + 'px)';
+  }
+});
+
+document.addEventListener('mouseup', function(e) {
+  if (!_layerDrag.active) return;
+  _layerDrag.active = false;
+
+  var item = _layerDrag.el;
+  var subEl = _layerDrag.subEl;
+
+  // Remove drag visual effects from layer-item
+  item.classList.remove('drag-ghost');
+  item.classList.remove('dragging-active');
+  item.style.transform = '';
+  item.style.transition = '';
+  var handle = item.querySelector('.layer-drag-handle');
+  if (handle) handle.classList.remove('dragging');
+
+  // Remove drag visual effects from sub-legends
+  if (subEl) {
+    subEl.classList.remove('dragging-sub');
+    subEl.style.transform = '';
+    subEl.style.transition = '';
+  }
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+
+  // Sync z-index/draw order based on final DOM position
+  applyLayerOrder();
+
+  // Reset state
+  _layerDrag.el = null;
+  _layerDrag.subEl = null;
+  _layerDrag.layerId = '';
+  _layerDrag.group = null;
+  _layerDrag.insertBefore = null;
+});
+
+// Apply drawing order: bottom of panel = lower z-index, top = on top
+function applyLayerOrder() {
+  var allItems = document.querySelectorAll('.layer-scroll .layer-item');
+  allItems.forEach(function(item, idx) {
+    var layerId = item.getAttribute('data-layer');
+    if (!layerId) return;
+    // z-index: higher index = drawn on top. Base 10, increment by 5 per position.
+    var z = 10 + idx * 5;
+    document.querySelectorAll('.map-inner [data-layer="' + layerId + '"]').forEach(function(el) {
+      // Don't override z-index for picked elements (they use higher z-index)
+      if (!el.classList.contains('picked')) {
+        el.style.zIndex = z;
+      }
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Timeline — time-field-driven (从选中图层属性中读取时间字段)
+// ═══════════════════════════════════════════════════════════════
+var isPlaying = false;
+var playInterval;
+var _timelineEnabled = false;   // controlled by checkbox
+var timelinePct = 0.5;          // slider position 0..1
+var playbackSpeed = 1;       // 0.5 | 1 | 2 | 4 | 8
+var BASE_STEP = 0.002;       // base step per tick at 1× speed
+
+function setPlaybackSpeed(speed, btn) {
+  playbackSpeed = speed;
+  // Update button active states
+  document.querySelectorAll('.speed-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  // If currently playing, restart interval with new speed
+  if (isPlaying) {
+    clearInterval(playInterval);
+    startPlayInterval();
+  }
+}
+
+function startPlayInterval() {
+  playInterval = setInterval(function() {
+    var newPct = timelinePct + BASE_STEP * playbackSpeed;
+    if (newPct >= 1) { newPct = 0; }
+    setTimelinePct(newPct);
+  }, 40);
+}
+var timelineRange = null;       // { minEpoch, maxEpoch, field, layerId } | null
+var _layerTimeField = {};      // { layerId → fieldName }  user-selected time field per layer
+var _currentTimeLayerId = '';  // which layer the time-field picker currently represents
+
+// Get all candidate time fields from a layer's elements (fields with ≥1 parseable value)
+function getLayerTimeFields(layerId) {
+  var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"][data-props]');
+  var fieldSet = {};
+  els.forEach(function(el) {
+    try {
+      var d = JSON.parse(el.getAttribute('data-props'));
+      for (var key in d) {
+        if (!fieldSet[key]) { fieldSet[key] = { total: 0, dateParseable: 0, numParseable: 0 }; }
+        fieldSet[key].total++;
+        if (!isNaN(parseTimeToEpoch(d[key]))) fieldSet[key].dateParseable++;
+        else if (!isNaN(parseNumericValue(d[key]))) fieldSet[key].numParseable++;
+      }
+    } catch(e) {}
+  });
+  // Return fields sorted: best parseable count desc, then name
+  var fields = [];
+  for (var key in fieldSet) {
+    var fi = fieldSet[key];
+    fields.push({ name: key, total: fi.total, parseable: fi.dateParseable + fi.numParseable, isNumeric: fi.numParseable > fi.dateParseable });
+  }
+  fields.sort(function(a, b) {
+    if (b.parseable !== a.parseable) return b.parseable - a.parseable;
+    return a.name.localeCompare(b.name);
+  });
+  return fields;
+}
+
+// Populate the time-field picker dropdown from the current layer
+function populateTimeFieldPicker(layerId) {
+  var picker = document.getElementById('timeFieldPicker');
+  if (!picker) return;
+  var fields = getLayerTimeFields(layerId);
+  var currentVal = _layerTimeField[layerId] || '';
+
+  var html = '<option value="">— 无 —</option>';
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i];
+    var kind = f.isNumeric ? '数值' : (f.parseable > 0 ? '时间' : '');
+    var label = f.name + (kind ? ' [' + kind + ' ' + f.parseable + '/' + f.total + ']' : '');
+    var sel = (f.name === currentVal) ? ' selected' : '';
+    html += '<option value="' + escAttr(f.name) + '"' + sel + '>' + label + '</option>';
+  }
+  picker.innerHTML = html;
+
+  // Auto-select best field if none chosen: prefer '时间' > 'time' > most parseable
+  if (!currentVal && fields.length > 0) {
+    var best = null;
+    for (var j = 0; j < fields.length; j++) {
+      if (fields[j].name === '时间') { best = fields[j]; break; }
+    }
+    if (!best) {
+      for (var k = 0; k < fields.length; k++) {
+        if (fields[k].name.toLowerCase() === 'time') { best = fields[k]; break; }
+      }
+    }
+    if (!best && fields[0].parseable > 0) best = fields[0];
+    if (best) {
+      _layerTimeField[layerId] = best.name;
+      picker.value = best.name;
+    }
+  }
+
+  _currentTimeLayerId = layerId;
+}
+
+function onTimeFieldChange(fieldName) {
+  var layerId = _currentTimeLayerId;
+  if (!layerId) return;
+  if (fieldName) {
+    _layerTimeField[layerId] = fieldName;
+  } else {
+    delete _layerTimeField[layerId];
+  }
+  updateTimelineRange();
+}
+
+// ── Time parsing: supports common date/time formats ──
+// HH:MM | HH:MM:SS | YYYY-MM-DD | YYYY/MM/DD | YYYY-MM-DD HH:MM | YYYY-MM-DDTHH:MM[:SS]
+// Returns epoch milliseconds, or NaN if unparseable
+function parseTimeToEpoch(val) {
+  if (val === null || val === undefined) return NaN;
+  var s = String(val).trim();
+  if (!s) return NaN;
+
+  // 1) Try ISO-like: YYYY-MM-DDTHH:MM:SS, YYYY-MM-DDTHH:MM, YYYY-MM-DD HH:MM:SS, YYYY-MM-DD HH:MM
+  var dtMatch = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (dtMatch) {
+    var y = parseInt(dtMatch[1], 10);
+    var mo = parseInt(dtMatch[2], 10) - 1;
+    var d = parseInt(dtMatch[3], 10);
+    var h = parseInt(dtMatch[4], 10);
+    var mi = parseInt(dtMatch[5], 10);
+    var sec = dtMatch[6] ? parseInt(dtMatch[6], 10) : 0;
+    if (mo < 0 || mo > 11 || d < 1 || d > 31 || h > 23 || mi > 59 || sec > 59) return NaN;
+    return Date.UTC(y, mo, d, h, mi, sec);
+  }
+
+  // 2) Try date-only: YYYY-MM-DD or YYYY/MM/DD
+  var dMatch = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if (dMatch) {
+    var y2 = parseInt(dMatch[1], 10);
+    var mo2 = parseInt(dMatch[2], 10) - 1;
+    var d2 = parseInt(dMatch[3], 10);
+    if (mo2 < 0 || mo2 > 11 || d2 < 1 || d2 > 31) return NaN;
+    return Date.UTC(y2, mo2, d2, 0, 0, 0);
+  }
+
+  // 3) Try time-only: HH:MM or HH:MM:SS → map to today UTC
+  var tMatch = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (tMatch) {
+    var hh3 = parseInt(tMatch[1], 10);
+    var mm3 = parseInt(tMatch[2], 10);
+    var ss3 = tMatch[3] ? parseInt(tMatch[3], 10) : 0;
+    if (hh3 > 23 || mm3 > 59 || ss3 > 59) return NaN;
+    var today = new Date();
+    return Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), hh3, mm3, ss3);
+  }
+
+  // 4) Try as raw timestamp (milliseconds or seconds)
+  var num = Number(s);
+  if (!isNaN(num) && num > 0) {
+    if (num > 1e12) return num;        // milliseconds
+    if (num > 1e9)  return num * 1000; // seconds
+  }
+
+  return NaN;
+}
+
+// Parse a plain numeric value (for numeric timeline fields like RAI, 人口, etc.)
+function parseNumericValue(val) {
+  if (val === null || val === undefined || val === '') return NaN;
+  var num = Number(String(val).replace(/[,，¥\s]/g, ''));
+  return isNaN(num) ? NaN : num;
+}
+
+// Auto-detect display format based on timeline range
+function formatTimelineValue(value, range) {
+  if (!range) return '—';
+  if (range.isNumeric) {
+    var span = range.maxEpoch - range.minEpoch;
+    if (span < 1) return value.toFixed(2);
+    if (span < 100) return value.toFixed(1);
+    return Math.round(value).toLocaleString();
+  }
+  var spanMs = range.maxEpoch - range.minEpoch;
+  var d = new Date(value);
+  var pad = function(n) { return String(n).padStart(2, '0'); };
+
+  if (spanMs <= 86400000) {
+    // Same-day: show HH:MM
+    return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+  } else if (spanMs <= 365 * 86400000) {
+    // Within a year: YYYY-MM-DD HH:MM
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) +
+           ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
+  } else {
+    // Multi-year: YYYY-MM-DD
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+  }
+}
+
+// Extract time-field range from a layer's map elements
+// Returns { minEpoch, maxEpoch, field, layerId, isNumeric } or null
+// If no field is pre-selected, auto-detects the best one
+function getLayerTimeRange(layerId) {
+  var timeField = _layerTimeField[layerId];
+
+  // Auto-detect best field if none chosen yet
+  if (!timeField) {
+    var fields = getLayerTimeFields(layerId);
+    // Prefer '时间' > 'time' > most parseable
+    var best = null;
+    for (var j = 0; j < fields.length; j++) {
+      if (fields[j].name === '时间') { best = fields[j]; break; }
+    }
+    if (!best) {
+      for (var k = 0; k < fields.length; k++) {
+        if (fields[k].name.toLowerCase() === 'time') { best = fields[k]; break; }
+      }
+    }
+    if (!best && fields.length > 0 && fields[0].parseable > 0) best = fields[0];
+    if (!best) return null;
+    timeField = best.name;
+    _layerTimeField[layerId] = timeField; // cache for future use
+  }
+
+  var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"][data-props]');
+  var vals = [];
+  var isNumeric = false;
+
+  els.forEach(function(el) {
+    try {
+      var d = JSON.parse(el.getAttribute('data-props'));
+      var v = d[timeField];
+      var ep = parseTimeToEpoch(v);
+      if (!isNaN(ep)) {
+        vals.push(ep);
+      } else {
+        var num = parseNumericValue(v);
+        if (!isNaN(num)) { vals.push(num); isNumeric = true; }
+      }
+    } catch(e) {}
+  });
+
+  if (vals.length === 0) return null;
+
+  vals.sort(function(a, b) { return a - b; });
+  return {
+    minEpoch: vals[0],
+    maxEpoch: vals[vals.length - 1],
+    field: timeField,
+    layerId: layerId,
+    isNumeric: isNumeric
+  };
+}
+
+// Update timeline range from currently highlighted layers
+function toggleTimelineEnabled() {
+  _timelineEnabled = document.getElementById('timelineEnable').checked;
+  var panel = document.getElementById('timelinePanel');
+  if (_timelineEnabled) {
+    if (panel) panel.classList.remove('disabled');
+    updateTimelineRange();
+  } else {
+    if (isPlaying) togglePlay();
+    clearTimelineElements();
+    timelineRange = null;
+    _timelineElCache = null;
+    if (panel) panel.classList.add('disabled');
+    var sl = document.querySelector('.time-label:first-of-type');
+    var el = document.querySelector('.time-label:last-of-type');
+    var cl = document.querySelector('.time-label.current');
+    if (sl) sl.textContent = '—';
+    if (el) el.textContent = '—';
+    if (cl) cl.textContent = '—';
+  }
+}
+
+function updateTimelineRange() {
+  if (!_timelineEnabled || !_legendConfig || !_highlightedLayerIds) return;
+
+  // No layers highlighted → clear timeline
+  if (_highlightedLayerIds.size === 0) {
+    clearTimelineElements();
+    timelineRange = null;
+    _timelineElCache = null;
+    var startLabel = document.querySelector('.time-label:first-of-type');
+    var endLabel = document.querySelector('.time-label:last-of-type');
+    var curLabel = document.querySelector('.time-label.current');
+    if (startLabel) startLabel.textContent = '—';
+    if (endLabel) endLabel.textContent = '—';
+    if (curLabel) curLabel.textContent = '—';
+    _currentTimeLayerId = '';
+    return;
+  }
+
+  var ids = Array.from(_highlightedLayerIds);
+
+  // Populate the time-field picker from the first highlighted layer
+  var pickerLayerId = ids[0];
+  if (pickerLayerId !== _currentTimeLayerId) {
+    populateTimeFieldPicker(pickerLayerId);
+  }
+
+  var bestRange = null;
+  for (var i = 0; i < ids.length; i++) {
+    var r = getLayerTimeRange(ids[i]);
+    if (r) { bestRange = r; break; }
+  }
+
+  timelineRange = bestRange;
+
+  var startLabel = document.querySelector('.time-label:first-of-type');
+  var endLabel = document.querySelector('.time-label:last-of-type');
+
+  if (timelineRange) {
+    if (startLabel) startLabel.textContent = formatTimelineValue(timelineRange.minEpoch, timelineRange);
+    if (endLabel) endLabel.textContent = formatTimelineValue(timelineRange.maxEpoch, timelineRange);
+  } else {
+    if (startLabel) startLabel.textContent = '—';
+    if (endLabel) endLabel.textContent = '—';
+  }
+
+  buildTimelineElCache();
+  setTimelinePct(timelinePct);
+}
+
+// Set slider position; interpolate time label from actual range
+function setTimelinePct(pct) {
+  if (!_timelineEnabled) return;
+  timelinePct = Math.max(0, Math.min(1, pct));
+  var fill = document.getElementById('timeFill');
+  if (fill) fill.style.width = (timelinePct * 100) + '%';
+  var thumb = document.getElementById('timeThumb');
+  if (thumb) thumb.style.left = (timelinePct * 100) + '%';
+
+  var label = document.querySelector('.time-label.current');
+  if (!label) return;
+
+  if (timelineRange) {
+    var epoch = timelineRange.minEpoch + timelinePct * (timelineRange.maxEpoch - timelineRange.minEpoch);
+    label.textContent = formatTimelineValue(epoch, timelineRange);
+    // Light up elements based on current timeline time
+    syncTimelineElements(epoch);
+  } else {
+    label.textContent = '—';
+    clearTimelineElements();
+  }
+}
+
+// ── Timeline element lighting ──
+// Cache: [ { el, epoch } ]
+var _timelineElCache = null;
+
+function buildTimelineElCache() {
+  if (!timelineRange) { _timelineElCache = null; return; }
+  var layerId = timelineRange.layerId;
+  var field = timelineRange.field;
+  var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"][data-props]');
+  var cache = [];
+  els.forEach(function(el) {
+    try {
+      var d = JSON.parse(el.getAttribute('data-props'));
+      var v = d[field];
+      var ep = timelineRange.isNumeric ? parseNumericValue(v) : parseTimeToEpoch(v);
+      if (!isNaN(ep)) cache.push({ el: el, epoch: ep });
+    } catch(e) {}
+  });
+  cache.sort(function(a, b) { return a.epoch - b.epoch; });
+  _timelineElCache = cache;
+}
+
+function syncTimelineElements(currentEpoch) {
+  if (!_timelineEnabled) return;
+  if (!_timelineElCache || _timelineElCache.length === 0) return;
+
+  var closestIdx = 0;
+  var closestDist = Infinity;
+
+  for (var i = 0; i < _timelineElCache.length; i++) {
+    var entry = _timelineElCache[i];
+    var el = entry.el;
+    el.classList.remove('time-past', 'time-active', 'time-future');
+
+    if (entry.epoch <= currentEpoch) {
+      el.classList.add('time-past');
+    } else {
+      el.classList.add('time-future');
+    }
+
+    var dist = Math.abs(entry.epoch - currentEpoch);
+    if (dist < closestDist) {
+      closestDist = dist;
+      closestIdx = i;
+    }
+  }
+
+  var activeEntry = _timelineElCache[closestIdx];
+  activeEntry.el.classList.remove('time-past', 'time-future');
+  activeEntry.el.classList.add('time-active');
+}
+
+function clearTimelineElements() {
+  if (!_timelineElCache) return;
+  for (var i = 0; i < _timelineElCache.length; i++) {
+    var el = _timelineElCache[i].el;
+    el.classList.remove('time-past', 'time-active', 'time-future');
+  }
+}
+
+// Jump timeline to a specific element's time value
+function jumpTimelineToElement(el) {
+  if (!_timelineEnabled) return;
+  if (!el) return;
+  var layerId = el.getAttribute('data-layer');
+  if (!layerId) return;
+  // Ensure timeline range matches this element's layer
+  if (!timelineRange || timelineRange.layerId !== layerId) {
+    var r = getLayerTimeRange(layerId);
+    if (r) {
+      timelineRange = r;
+      var startLabel = document.querySelector('.time-label:first-of-type');
+      var endLabel = document.querySelector('.time-label:last-of-type');
+      if (startLabel) startLabel.textContent = formatTimelineValue(r.minEpoch, r);
+      if (endLabel) endLabel.textContent = formatTimelineValue(r.maxEpoch, r);
+      buildTimelineElCache();
+    }
+  }
+  if (!timelineRange) return;
+
+  try {
+    var d = JSON.parse(el.getAttribute('data-props'));
+    var v = d[timelineRange.field];
+    var epoch = timelineRange.isNumeric ? parseNumericValue(v) : parseTimeToEpoch(v);
+    if (!isNaN(epoch) && timelineRange.maxEpoch > timelineRange.minEpoch) {
+      var pct = (epoch - timelineRange.minEpoch) / (timelineRange.maxEpoch - timelineRange.minEpoch);
+      setTimelinePct(pct);
+    }
+  } catch(e) {}
+}
+
+function togglePlay() {
+  if (!_timelineEnabled || !timelineRange) return;
+  isPlaying = !isPlaying;
+  var btn = document.getElementById('playBtn');
+  if (isPlaying) {
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="white"><rect x="1" y="1" width="3" height="8"/><rect x="6" y="1" width="3" height="8"/></svg>';
+    startPlayInterval();
+  } else {
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>';
+    clearInterval(playInterval);
+    playInterval = null;
+  }
+}
+
+// --- Timeline drag ---
+var timelineDrag = { active: false };
+
+(function initTimelineDrag() {
+  var track = document.getElementById('timeTrack');
+  if (!track) return;
+
+  function clientXFromEvent(e) {
+    if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+    return e.clientX;
+  }
+
+  function updateFromEvent(e) {
+    var rect = track.getBoundingClientRect();
+    var cx = clientXFromEvent(e);
+    var pct = (cx - rect.left) / rect.width;
+    setTimelinePct(pct);
+  }
+
+  function onStart(e) {
+    if (!_timelineEnabled) return;
+    if (isPlaying) togglePlay();
+    timelineDrag.active = true;
+    track.classList.add('dragging');
+    var thumb = document.getElementById('timeThumb');
+    if (thumb) thumb.classList.add('dragging');
+    updateFromEvent(e);
+    e.preventDefault();
+  }
+
+  function onMove(e) {
+    if (!timelineDrag.active) return;
+    updateFromEvent(e);
+  }
+
+  function onEnd() {
+    if (!timelineDrag.active) return;
+    timelineDrag.active = false;
+    track.classList.remove('dragging');
+    var thumb = document.getElementById('timeThumb');
+    if (thumb) thumb.classList.remove('dragging');
+  }
+
+  track.addEventListener('mousedown', onStart);
+  track.addEventListener('touchstart', onStart, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onEnd);
+  document.addEventListener('touchend', onEnd);
+})();
+
+// ═══ Timeline initialized after legend config ═══
+// (moved to end of init section)
+
+// --- Responsive scaling (等比缩放) ---
+var panX = 0, panY = 0; // pan offsets in viewport pixels
+
+function applyResponsiveScale() {
+  var wrapper = document.getElementById('viewport');
+  if (!wrapper) return;
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  var scale = Math.min(vw / 1440, vh / 900);
+  var offsetX = (vw - 1440 * scale) / 2;
+  var offsetY = (vh - 900 * scale) / 2;
+  wrapper.style.transform = 'scale(' + scale + ')';
+  wrapper.style.left = offsetX + 'px';
+  wrapper.style.top = offsetY + 'px';
+}
+
+// Apply pan + zoom to map inner only (not the whole viewport)
+function applyMapTransform() {
+  var inner = document.getElementById('mapInner');
+  if (!inner) return;
+  inner.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + mapScale + ')';
+}
+window.addEventListener('resize', applyResponsiveScale);
+applyResponsiveScale();
+
+// --- Mouse wheel on map canvas for zoom ---
+document.getElementById('mapCanvas').addEventListener('wheel', function(e) {
+  e.preventDefault();
+  if (e.deltaY > 0) zoomOut(); else zoomIn();
+}, { passive: false });
+
+// --- Map element click →show properties in right drawer ---
+function _pickEl(el) {
+  if (!el) return;
+  var origZ = el.style.zIndex;
+  el.dataset._origZ = origZ || '';
+  var maxZ = 0;
+  document.querySelectorAll('.map-inner [data-layer]').forEach(function(m) {
+    var z = parseInt(m.style.zIndex) || 0;
+    if (z > maxZ) maxZ = z;
+  });
+  el.style.zIndex = Math.max(maxZ + 5, 50);
+  el.classList.add('picked');
+}
+function _unpickEl(el) {
+  if (!el) return;
+  el.classList.remove('picked');
+  if (el.dataset._origZ !== undefined) {
+    el.style.zIndex = el.dataset._origZ;
+    delete el.dataset._origZ;
+  }
+}
+function _unpickAll() {
+  document.querySelectorAll('.picked').forEach(function(m) { _unpickEl(m); });
+}
+
+function selectFeature(el) {
+  // Remove all picked highlights
+  _unpickAll();
+  _pickEl(el);
+
+  // Jump timeline to this element's time value
+  jumpTimelineToElement(el);
+
+  // Parse data-props
+  var propsStr = el.getAttribute('data-props');
+  if (!propsStr) return;
+  var props = JSON.parse(propsStr);
+
+  // Build property rows
+  var html = '<div class="property-title">' + (props['name'] || props['名称'] || props['位点'] || '未命名') + ' — ' + (props['类型'] || props['物种'] || '要素') + '</div>';
+  var labels = { '行政编码': '行政编码', '面积': '面积', '人口': '人口', 'GDP': 'GDP', '严重程度': '严重程度', '时间': '时间', '位置': '位置', '评分': '评分', '地址': '地址', '电话': '电话', '营业时间': '营业时间', '类别': '类别', '学生数': '学生数', '位点': '位点', '物种': '物种' };
+  for (var key in props) {
+    if (key === 'name' || key === '类型') continue;
+    var label = labels[key] || key;
+    html += '<div class="prop-row"><span class="prop-label">' + label + '</span><span class="prop-value">' + props[key] + '</span></div>';
+  }
+
+  var section = document.getElementById('tab-prop');
+  if (!section) return;
+  // Preserve the section-title, replace everything after it
+  var titleEl = section.querySelector('.section-title');
+  // Remove all content after section-title
+  while (titleEl && titleEl.nextElementSibling) {
+    titleEl.nextElementSibling.remove();
+  }
+  // Append new content
+  var temp = document.createElement('div');
+  temp.innerHTML = html;
+  while (temp.firstChild) {
+    section.appendChild(temp.firstChild);
+  }
+
+  // Activate 属性 panel + tab
+  activatePanelTab('tab-prop', 'lower');
+}
+
+// Render multi-element property cards (框选多要素)
+// Highlight a specific map element from a multi-select card click
+function focusCardElement(idx) {
+  var els = window._multiSelectEls;
+  if (!els || idx < 0 || idx >= els.length) return;
+  // Remove previous focused-card highlight on all cards
+  document.querySelectorAll('.property-card.focused-card').forEach(function(c) { c.classList.remove('focused-card'); });
+  // Highlight the clicked card
+  var cards = document.querySelectorAll('.prop-cards-grid .property-card');
+  if (cards[idx]) cards[idx].classList.add('focused-card');
+  // Remove all .picked, add .picked only to this element
+  _unpickAll();
+  _pickEl(els[idx]);
+}
+
+function renderMultiProperty(els) {
+  // Remove all picked highlights, then add back
+  _unpickAll();
+  els.forEach(function(el) { _pickEl(el); });
+
+  // Store refs for card-click handler
+  window._multiSelectEls = Array.from(els);
+
+  var section = document.getElementById('tab-prop');
+  if (!section) return;
+
+  var labels = { '行政编码': '行政编码', '面积': '面积', '人口': '人口', 'GDP': 'GDP', '严重程度': '严重程度', '时间': '时间', '位置': '位置', '评分': '评分', '地址': '地址', '电话': '电话', '营业时间': '营业时间', '类别': '类别', '学生数': '学生数', '位点': '位点', '物种': '物种' };
+
+  // Determine grid column class
+  var gridClass = '';
+
+  var html = '<div class="prop-selection-count">已选' + els.length + ' 个要素</div>';
+  html += '<div class="prop-cards-grid' + gridClass + '">';
+
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    var propsStr = el.getAttribute('data-props');
+    var props = {};
+    try { if (propsStr) props = JSON.parse(propsStr); } catch(e) {}
+
+    var name = props['name'] || props['名称'] || props['位点'] || '未命名';
+    var type = props['类型'] || props['物种'] || '要素';
+
+    html += '<div class="property-card picked-card" data-el-idx="' + i + '" onclick="focusCardElement(' + i + ')">';
+    // Header
+    html += '<div class="property-card-header">';
+    html += '<span class="property-card-idx">#' + (i + 1) + '</span>';
+    html += '<span class="property-card-name">' + name + '</span>';
+    html += '<span class="property-card-type">' + type + '</span>';
+    html += '</div>';
+    // Body —key properties
+    html += '<div class="property-card-body">';
+    for (var key in props) {
+      if (key === 'name' || key === '类型') continue;
+      var label = labels[key] || key;
+      html += '<div class="prop-row"><span class="prop-label">' + label + '</span><span class="prop-value">' + props[key] + '</span></div>';
+    }
+    if (Object.keys(props).length <= 2) {
+      html += '<div class="prop-row"><span class="prop-label" style="color:var(--text-muted);font-style:italic;">暂无更多属性</span></div>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+
+  // Preserve section-title, replace everything after it
+  var titleEl = section.querySelector('.section-title');
+  // Remove all content after section-title
+  while (titleEl && titleEl.nextElementSibling) {
+    titleEl.nextElementSibling.remove();
+  }
+  // Append new content
+  var temp = document.createElement('div');
+  temp.innerHTML = html;
+  while (temp.firstChild) {
+    section.appendChild(temp.firstChild);
+  }
+
+  // Activate 属性 panel + tab
+  activatePanelTab('tab-prop', 'lower');
+}
+
+// Click on POI markers
+document.querySelectorAll('.poi-marker').forEach(function(marker) {
+  marker.addEventListener('click', function(e) {
+    e.stopPropagation();
+    selectFeature(this);
+  });
+});
+// Click on species markers
+document.querySelectorAll('.species-marker').forEach(function(marker) {
+  marker.addEventListener('click', function(e) {
+    e.stopPropagation();
+    selectFeature(this);
+  });
+});
+
+// Click on region outline
+document.querySelector('.region-outline').addEventListener('click', function(e) {
+  e.stopPropagation();
+  var selectedPoi = document.querySelector('.poi-selected');
+  if (selectedPoi) selectFeature(selectedPoi);
+});
+
+// Helper: get current viewport scale
+function getViewportScale() {
+  var vp = document.getElementById('viewport');
+  if (!vp) return 1;
+  var t = getComputedStyle(vp).transform;
+  if (!t || t === 'none') return 1;
+  var m = t.match(/matrix\(([^)]+)\)/);
+  if (m) {
+    var parts = m[1].split(',').map(parseFloat);
+    return parts[0]; // scaleX
+  }
+  return 1;
+}
+
+// ── Coordinate calibration: % position → lon/lat ──
+var LON_0  = 116.15;   // lon at left:0%
+var LON_R  = 116.56;   // lon at left:100%
+var LAT_0  = 40.05;    // lat at top:0%
+var LAT_R  = 39.58;    // lat at top:100%
+
+function screenToLonLat(clientX, clientY) {
+  var canvasRect = mapCanvas.getBoundingClientRect();
+  var vs = getViewportScale();
+
+  // Mouse position in canvas coordinate space
+  var mx = (clientX - canvasRect.left) / vs;
+  var my = (clientY - canvasRect.top) / vs;
+
+  // Convert to map-inner percentage coordinates
+  var innerW = canvasRect.width / vs;
+  var innerH = canvasRect.height / vs;
+  var pctX = ((mx - panX) / mapScale) / innerW * 100;
+  var pctY = ((my - panY) / mapScale) / innerH * 100;
+
+  var lon = LON_0 + (LON_R - LON_0) * pctX / 100;
+  var lat = LAT_0 + (LAT_R - LAT_0) * pctY / 100;
+  return { lon: lon, lat: lat };
+}
+
+// Inverse: lon/lat → map % position
+function lonLatToPct(lon, lat) {
+  var pctX = (lon - LON_0) / (LON_R - LON_0) * 100;
+  var pctY = (lat - LAT_0) / (LAT_R - LAT_0) * 100;
+  return { left: pctX, top: pctY };
+}
+
+// Click on map canvas background →deselect (skip if box-select just finished)
+document.getElementById('mapCanvas').addEventListener('click', function(e) {
+  if (boxSelectJustFinished) return;
+  if (e.target === this || e.target.classList.contains('map-grid')) {
+    _unpickAll();
+  }
+});
+
+// --- Box-select tool ---
+var boxSelect = { active: false, startX: 0, startY: 0 };
+var selBox = document.getElementById('selectionBox');
+var mapCanvas = document.getElementById('mapCanvas');
+var mapInner = document.getElementById('mapInner');
+var boxSelectJustFinished = false;
+
+// ── Mouse coordinate display ──
+mapCanvas.addEventListener('mousemove', function(e) {
+  var coord = screenToLonLat(e.clientX, e.clientY);
+  var disp = document.getElementById('coordDisplay');
+  if (disp) {
+    disp.textContent = coord.lat.toFixed(4) + '° N, ' + coord.lon.toFixed(4) + '° E';
+  }
+});
+
+mapCanvas.addEventListener('mouseleave', function() {
+  var disp = document.getElementById('coordDisplay');
+  if (disp) disp.textContent = '39.9042° N, 116.4074° E';
+});
+
+// --- Pan state ---
+var isPanning = false;
+var panStartX, panStartY, panStartPanX, panStartPanY;
+
+mapCanvas.addEventListener('mousedown', function(e) {
+  // Box-select tool
+  if (currentTool === 'box-select') {
+    if (e.target.closest('.poi-marker') || e.target.closest('.species-marker') || e.target.closest('.toolbar-btn') || e.target.closest('button')) return;
+    e.preventDefault();
+    boxSelectJustFinished = false;
+    var rect = mapCanvas.getBoundingClientRect();
+    var scale2 = getViewportScale();
+    boxSelect.active = true;
+    boxSelect.startX = (e.clientX - rect.left) / scale2;
+    boxSelect.startY = (e.clientY - rect.top) / scale2;
+    selBox.style.display = 'block';
+    selBox.style.left = boxSelect.startX + 'px';
+    selBox.style.top = boxSelect.startY + 'px';
+    selBox.style.width = '0px';
+    selBox.style.height = '0px';
+    return;
+  }
+
+  // Pan —start dragging (skip on markers or buttons)
+  if (e.target.closest('.poi-marker') || e.target.closest('.species-marker') || e.target.closest('button')) return;
+  if (e.button !== 0) return;
+  isPanning = true;
+  mapInner.classList.add('grabbing');
+  panStartX = e.clientX;
+  panStartY = e.clientY;
+  panStartPanX = panX;
+  panStartPanY = panY;
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', function(e) {
+  // Box-select drag
+  if (boxSelect.active) {
+    var rect = mapCanvas.getBoundingClientRect();
+    var scale = getViewportScale();
+    var cx = (e.clientX - rect.left) / scale;
+    var cy = (e.clientY - rect.top) / scale;
+    var l = Math.min(boxSelect.startX, cx);
+    var t = Math.min(boxSelect.startY, cy);
+    var w = Math.abs(cx - boxSelect.startX);
+    var h = Math.abs(cy - boxSelect.startY);
+    selBox.style.left = l + 'px';
+    selBox.style.top = t + 'px';
+    selBox.style.width = w + 'px';
+    selBox.style.height = h + 'px';
+    return;
+  }
+
+  // Pan drag
+  if (isPanning) {
+    var scale3 = getViewportScale();
+    panX = panStartPanX + (e.clientX - panStartX) / scale3;
+    panY = panStartPanY + (e.clientY - panStartY) / scale3;
+    applyMapTransform();
+  }
+});
+
+document.addEventListener('mouseup', function(e) {
+  // Box-select completion
+  if (boxSelect.active) {
+    boxSelect.active = false;
+
+    var bRect = selBox.getBoundingClientRect();
+    var w = parseInt(selBox.style.width) || 0;
+    var h = parseInt(selBox.style.height) || 0;
+
+    selBox.style.display = 'none';
+
+    if (w >= 5 || h >= 5) {
+      boxSelectJustFinished = true;
+      setTimeout(function() { boxSelectJustFinished = false; }, 100);
+
+      var matched = [];
+      var selector = '.map-inner [data-props]';
+      // If any layers are highlighted, restrict box-select to those layers only
+      if (_highlightedLayerIds.size > 0) {
+        var parts = [];
+        _highlightedLayerIds.forEach(function(lid) {
+          parts.push('[data-layer="' + lid + '"][data-props]');
+        });
+        selector = parts.join(', ');
+      }
+      document.querySelectorAll(selector).forEach(function(m) {
+        var mRect = m.getBoundingClientRect();
+        var mcx = mRect.left + mRect.width / 2;
+        var mcy = mRect.top + mRect.height / 2;
+        if (mcx >= bRect.left && mcx <= bRect.right && mcy >= bRect.top && mcy <= bRect.bottom) {
+          matched.push(m);
+        }
+      });
+
+      if (matched.length > 0) {
+        renderMultiProperty(matched);
+      } else {
+        var section = document.getElementById('tab-prop');
+        if (section) {
+          var titleEl = section.querySelector('.section-title');
+          while (titleEl && titleEl.nextElementSibling) {
+            titleEl.nextElementSibling.remove();
+          }
+          var temp = document.createElement('div');
+          temp.innerHTML = '<div class="property-title">框选结果</div><div class="prop-row"><span class="prop-label">提示</span><span class="prop-value" style="color:var(--text-muted);">未选中任何要素</span></div>';
+          while (temp.firstChild) {
+            section.appendChild(temp.firstChild);
+          }
+          activatePanelTab('tab-prop', 'lower');
+        }
+      }
+    }
+  }
+
+  // Pan stop
+  if (isPanning) {
+    isPanning = false;
+    mapInner.classList.remove('grabbing');
+  }
+});
+// ════════════════════════════════════════════════════════════════════════════
+//  Legend config system v2 —layer-driven + property mapping
+// ════════════════════════════════════════════════════════════════════════════
+var _legendConfig = {};     // {label, shape, color, size, layerId, sizeProp, sizeMin, sizeMax, propRange, catProp, catType, catMapping}
+var _legendActiveId = null;
+var _legendShapes = ['circle','diamond','square','triangle','pin'];
+var _legendColors = ['#D97706','#DC2626','#3B82F6','#1E40AF','#059669','#8B5CF6','#EC4899','#F59E0B','#6B7280','#000000'];
+var _defaultLegendConfig = {
+  'poi':   { shape:'circle', color:'#3B82F6', size:12, sizeProp:'', sizeMin:6, sizeMax:24, catProp:'', catType:'shape', catMapping:{} },
+  'admin': { shape:'circle', color:'#1E40AF', size:16, sizeProp:'', sizeMin:10, sizeMax:26, catProp:'', catType:'shape', catMapping:{} }
+};
+
+// --- Layer name helper ---
+function getLayerName(layerId) {
+  var item = document.querySelector('.layer-item[data-layer="'+layerId+'"]');
+  if (item) {
+    var nameEl = item.querySelector('.layer-item-name');
+    if (nameEl) return nameEl.textContent.trim();
+  }
+  return layerId;
+}
+
+// --- Collect numeric properties from layer elements ---
+function getLayerNumericProps(layerId) {
+  var props = {};
+  var els = document.querySelectorAll('.map-inner [data-layer="'+layerId+'"][data-props]');
+  els.forEach(function(el) {
+    try {
+      var d = JSON.parse(el.getAttribute('data-props'));
+      for (var k in d) {
+        var v = d[k];
+        if (v == null) continue;
+        // Try to extract numeric value
+        var num = parseFloat(String(v).replace(/[,，¥\s]/g,'').replace(/[^\d.-]/g,''));
+        if (!isNaN(num) && String(v).replace(/[,，¥\s]/g,'').trim() !== '') {
+          if (!props[k]) props[k] = [];
+          props[k].push(num);
+        }
+      }
+    } catch(e) {}
+  });
+  // Only keep keys where all values are numeric
+  var result = {};
+  for (var k in props) {
+    if (props[k].length > 0 && props[k].every(function(n){ return !isNaN(n); })) {
+      result[k] = props[k];
+    }
+  }
+  return result;
+}
+
+// --- Collect string (categorical) properties from layer elements ---
+function getLayerStringProps(layerId) {
+  var props = {};
+  var els = document.querySelectorAll('.map-inner [data-layer="'+layerId+'"][data-props]');
+  els.forEach(function(el) {
+    try {
+      var d = JSON.parse(el.getAttribute('data-props'));
+      for (var k in d) {
+        var v = d[k];
+        if (v == null || v === '') continue;
+        // Check if it's NOT purely numeric
+        var num = parseFloat(String(v).replace(/[,，¥\s]/g,'').replace(/[^\d.-]/g,''));
+        if (!isNaN(num)) continue; // skip numeric props
+        if (!props[k]) props[k] = {};
+        props[k][String(v)] = true;
+      }
+    } catch(e) {}
+  });
+  // Convert sets to sorted arrays, only keep props with 2+ distinct values
+  var result = {};
+  for (var k in props) {
+    var vals = Object.keys(props[k]);
+    if (vals.length >= 2) result[k] = vals.sort();
+  }
+  return result;
+}
+
+// --- Init legend ---
+function initLegend() {
+  // Initialize legend config for each business layer
+  var layerItems = document.querySelectorAll('.layer-item');
+  layerItems.forEach(function(item) {
+    var layerId = item.getAttribute('data-layer');
+    if (!layerId) return;
+    // Only include layers that have data-props elements on map
+    var els = document.querySelectorAll('.map-inner [data-layer="'+layerId+'"][data-props]');
+    if (els.length === 0) return;
+    var name = getLayerName(layerId);
+    _legendConfig[layerId] = JSON.parse(JSON.stringify(_defaultLegendConfig[layerId] || { shape:'circle', color:'#3B82F6', size:12, sizeProp:'', sizeMin:6, sizeMax:24, catProp:'', catType:'shape', catMapping:{} }));
+    _legendConfig[layerId].layerId = layerId;
+    _legendConfig[layerId].label = name;
+  });
+  // Apply config & inject inline symbols into layer items
+  for (var id in _legendConfig) {
+    _injectLayerItemSymbols(id);
+    _updateLayerItemSwatch(id);
+    applyLegendToMap(id);
+    buildSubLegends(id);
+  }
+}
+
+// --- Inject inline symbol controls & sub-legends into business layer items ---
+// Restructures: checkbox →swatch(inline) →name →badge →opacity →toggle →gear
+//              →layer-sub-legends (sibling)
+function _injectLayerItemSymbols(id) {
+  var item = document.querySelector('.layer-item[data-layer="'+id+'"]');
+  if (!item || item.parentNode.querySelector('.layer-sub-legends[id="layer-sub-'+id+'"]')) return; // already injected
+  // 1. Insert swatch after checkbox (before name)
+  var cb = item.querySelector('.checkbox');
+  var swatch = document.createElement('span');
+  swatch.className = 'layer-swatch-inline';
+  swatch.id = 'layer-swatch-'+id;
+  swatch.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14"></svg>';
+  if (cb) { cb.insertAdjacentElement('afterend', swatch); }
+  else { item.insertBefore(swatch, item.firstChild); }
+
+  // 2. Append toggle + gear at the end
+  var toggle = document.createElement('button');
+  toggle.className = 'layer-toggle collapsed';
+  toggle.setAttribute('data-toggle-id', id);
+  toggle.title = '展开映射图例';
+  toggle.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  toggle.onclick = function(e) { e.stopPropagation(); toggleSubLegends(id); };
+  item.appendChild(toggle);
+
+  var gear = document.createElement('span');
+  gear.className = 'layer-gear';
+  gear.title = '配置符号';
+  gear.innerHTML = '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="1.2"/><path d="M6 2V3m0 6v1M2 6h1m6 0h1M3.17 3.17l.7.7m4.26 4.26l.7.7M8.83 3.17l-.7.7m-4.26 4.26l-.7.7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+  gear.onclick = function(e) { e.stopPropagation(); openLegendConfig(e, id, item); };
+  item.appendChild(gear);
+
+  // 3. Create sub-legends container (sibling, after layer-item)
+  var sub = document.createElement('div');
+  sub.className = 'layer-sub-legends';
+  sub.id = 'layer-sub-'+id;
+  sub.innerHTML =
+    '<div class="legend-graduated" id="layer-grad-'+id+'"></div>'+
+    '<div class="legend-categorical" id="layer-cat-'+id+'"></div>';
+  item.insertAdjacentElement('afterend', sub);
+}
+
+// --- Update inline swatch inside a layer item ---
+function _updateLayerItemSwatch(id) {
+  var swatch = document.getElementById('layer-swatch-'+id);
+  if (!swatch) return;
+  var cfg = _legendConfig[id];
+  if (!cfg) return;
+  swatch.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14">'+_legendShapeSVG(cfg.shape, cfg.color)+'</svg>';
+}
+
+// --- Shape SVG ---
+function _legendShapeSVG(shape, color) {
+  var c = color || '#666';
+  switch(shape) {
+    case 'circle':  return '<circle cx="7" cy="7" r="5.5" fill="'+c+'"/>';
+    case 'diamond': return '<rect x="1.5" y="1.5" width="9.9" height="9.9" rx="1" fill="'+c+'" transform="rotate(45,7,7)"/>';
+    case 'square':  return '<rect x="1" y="1" width="12" height="12" rx="1.5" fill="'+c+'"/>';
+    case 'triangle':return '<polygon points="7,1 13,13 1,13" fill="'+c+'"/>';
+    case 'pin': return '<path d="M7 1.5C4.2 1.5 2 3.7 2 6.5c0 3.5 5 8 5 8s5-4.5 5-8c0-2.8-2.2-5-5-5z" fill="'+c+'"/>';
+    default: return '<circle cx="7" cy="7" r="5.5" fill="'+c+'"/>';
+  }
+}
+
+function openLegendConfig(e, id, sourceEl) {
+  e.stopPropagation();
+  if (_legendActiveId === id) { closeLegendConfig(); return; }
+  _legendActiveId = id;
+  var cfg = _legendConfig[id];
+  if (!cfg) return;
+  var pop = document.getElementById('legendConfigPopover');
+
+  // Sync layer highlight (ensure it's on, not toggled off)
+  setLayerHighlight(id);
+
+  // Shape picker
+  var shapeHTML = '';
+  _legendShapes.forEach(function(s) {
+    var activeClass = (s === cfg.shape) ? ' active' : '';
+    shapeHTML += '<div class="legend-shape-opt'+activeClass+'" onclick="event.stopPropagation();onLegendShape(\''+s+'\')">'+
+      '<svg class="legend-shape-svg" viewBox="0 0 14 14">'+_legendShapeSVG(s, s===cfg.shape?'var(--primary)':'#94A3B8')+'</svg></div>';
+  });
+  document.getElementById('cfgShape').innerHTML = shapeHTML;
+
+  // Color picker
+  var colorHTML = '';
+  _legendColors.forEach(function(c) {
+    var activeClass = (c === cfg.color) ? ' active' : '';
+    colorHTML += '<div class="legend-color-opt'+activeClass+'" style="background:'+c+'" onclick="event.stopPropagation();onLegendColor(\''+c+'\')"></div>';
+  });
+  document.getElementById('cfgColor').innerHTML = colorHTML;
+
+  // Numeric property →size mapping
+  var numProps = getLayerNumericProps(id);
+  var sel = document.getElementById('cfgSizeProp');
+  sel.innerHTML = '<option value="">不映射</option>';
+  for (var prop in numProps) {
+    var vals = numProps[prop];
+    var range = '('+Math.min.apply(null,vals).toLocaleString()+' — '+Math.max.apply(null,vals).toLocaleString()+')';
+    sel.innerHTML += '<option value="'+prop+'"'+(cfg.sizeProp===prop?' selected':'')+'>'+prop+' '+range+'</option>';
+  }
+  document.getElementById('cfgSizeMin').value = cfg.sizeMin;
+  document.getElementById('cfgSizeMax').value = cfg.sizeMax;
+  document.getElementById('cfgSizeRange').style.display = cfg.sizeProp ? '' : 'none';
+
+  // Categorical property →shape/color mapping
+  var strProps = getLayerStringProps(id);
+  var selCat = document.getElementById('cfgCatProp');
+  selCat.innerHTML = '<option value="">不映射</option>';
+  for (var sp in strProps) {
+    var svals = strProps[sp];
+    selCat.innerHTML += '<option value="'+sp+'"'+(cfg.catProp===sp?' selected':'')+'>'+sp+' ('+svals.length+'种)</option>';
+  }
+  var typeRow = document.getElementById('cfgCatTypeRow');
+  if (cfg.catProp) {
+    typeRow.style.display = '';
+    document.querySelectorAll('#cfgCatTypeRow .legend-cat-type-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-cat-type') === cfg.catType);
+    });
+    renderCatValues(id);
+  } else {
+    typeRow.style.display = 'none';
+  }
+
+  // Position popover alongside the source element (fixed to viewport)
+  var anchor = sourceEl;
+  if (anchor) {
+    var rect = anchor.getBoundingClientRect();
+    pop.style.top = (rect.top - 4) + 'px';
+    pop.style.left = (rect.right + 6) + 'px';
+  }
+  pop.classList.add('show');
+}
+
+function closeLegendConfig() {
+  _legendActiveId = null;
+  document.getElementById('legendConfigPopover').classList.remove('show');
+}
+
+// Multi-layer selection system
+var _highlightedLayerIds = new Set(); // Set of selected layer ids
+
+// Add a layer to the selection (apply CSS feedback)
+function _addLayerToSelection(id) {
+  if (_highlightedLayerIds.has(id)) return;
+  _highlightedLayerIds.add(id);
+  var item = document.querySelector('.layer-item[data-layer="'+id+'"]');
+  if (item) item.classList.add('layer-config-open');
+  var sub = document.getElementById('layer-sub-'+id);
+  if (sub) sub.classList.add('layer-config-open');
+}
+
+// Remove a layer from the selection (remove CSS feedback)
+function _removeLayerFromSelection(id) {
+  if (!_highlightedLayerIds.has(id)) return;
+  _highlightedLayerIds.delete(id);
+  var item = document.querySelector('.layer-item[data-layer="'+id+'"]');
+  if (item) item.classList.remove('layer-config-open');
+  var sub = document.getElementById('layer-sub-'+id);
+  if (sub) sub.classList.remove('layer-config-open');
+}
+
+// Clear all selected layers
+function _clearLayerSelection() {
+  _highlightedLayerIds.forEach(function(id) {
+    var item = document.querySelector('.layer-item[data-layer="'+id+'"]');
+    if (item) item.classList.remove('layer-config-open');
+    var sub = document.getElementById('layer-sub-'+id);
+    if (sub) sub.classList.remove('layer-config-open');
+  });
+  _highlightedLayerIds.clear();
+  updateTimelineRange();
+}
+
+// Refresh CSS on all layer items to match the current Set (sync after DOM changes)
+function _syncLayerSelectionCSS() {
+  document.querySelectorAll('.layer-item').forEach(function(item) {
+    var id = item.getAttribute('data-layer');
+    if (!id) return;
+    var inSet = _highlightedLayerIds.has(id);
+    item.classList.toggle('layer-config-open', inSet);
+    var sub = document.getElementById('layer-sub-'+id);
+    if (sub) sub.classList.toggle('layer-config-open', inSet);
+  });
+}
+
+// Get array of all business layer ids in DOM order (for Shift range select)
+function _getBusinessLayerIds() {
+  var ids = [];
+  document.querySelectorAll('.layer-item').forEach(function(item) {
+    var id = item.getAttribute('data-layer');
+    if (id && _legendConfig[id]) ids.push(id);
+  });
+  return ids;
+}
+
+// Unidirectional: ensure this layer is in the selection (used by gear/config)
+function setLayerHighlight(id) {
+  if (!_highlightedLayerIds.has(id)) {
+    _addLayerToSelection(id);
+    updateTimelineRange();
+  }
+}
+
+// Toggle with modifier support: Ctrl=toggle, Shift=range, plain=solo
+function toggleLayerHighlight(id, e) {
+  var ctrl = e && (e.ctrlKey || e.metaKey);
+  var shift = e && e.shiftKey;
+
+  if (shift) {
+    // Range select: from last-selected to clicked, inclusive
+    var allIds = _getBusinessLayerIds();
+    var lastId = _highlightedLayerIds.size > 0 ? Array.from(_highlightedLayerIds).pop() : null;
+    if (lastId && allIds.indexOf(lastId) >= 0 && allIds.indexOf(id) >= 0) {
+      var from = allIds.indexOf(lastId);
+      var to = allIds.indexOf(id);
+      var start = Math.min(from, to);
+      var end = Math.max(from, to);
+      // Without Ctrl, clear first; with Ctrl, add to existing
+      if (!ctrl) _clearLayerSelection();
+      for (var i = start; i <= end; i++) {
+        _addLayerToSelection(allIds[i]);
+      }
+    } else {
+      // No prior selection, treat as solo
+      _clearLayerSelection();
+      _addLayerToSelection(id);
+    }
+  } else if (ctrl) {
+    // Toggle individual layer
+    if (_highlightedLayerIds.has(id)) {
+      _removeLayerFromSelection(id);
+    } else {
+      _addLayerToSelection(id);
+    }
+  } else {
+    // Plain click: clear all, select only clicked
+    if (_highlightedLayerIds.has(id) && _highlightedLayerIds.size === 1) {
+      _removeLayerFromSelection(id); // toggle off
+    } else {
+      _clearLayerSelection();
+      _addLayerToSelection(id);
+    }
+  }
+  updateTimelineRange();
+}
+
+function onLegendShape(shape) {
+  if (!_legendActiveId) return;
+  _legendConfig[_legendActiveId].shape = shape;
+  applyLegendToMap(_legendActiveId);
+  _updateLayerItemSwatch(_legendActiveId);
+  buildSubLegends(_legendActiveId); // rebuild inline sub-legends (cat shape mapping may reference shape)
+  document.querySelectorAll('#cfgShape .legend-shape-opt').forEach(function(opt, i) {
+    opt.classList.toggle('active', _legendShapes[i] === shape);
+    var svg = opt.querySelector('svg');
+    svg.innerHTML = _legendShapeSVG(_legendShapes[i], _legendShapes[i]===shape?'var(--primary)':'#94A3B8');
+  });
+}
+
+function onLegendColor(color) {
+  if (!_legendActiveId) return;
+  _legendConfig[_legendActiveId].color = color;
+  applyLegendToMap(_legendActiveId);
+  _updateLayerItemSwatch(_legendActiveId);
+  buildSubLegends(_legendActiveId); // rebuild inline sub-legends (grad circles + cat swatches use cfg.color)
+  document.querySelectorAll('#cfgColor .legend-color-opt').forEach(function(opt) {
+    opt.classList.toggle('active', opt.style.backgroundColor === color);
+  });
+}
+
+function onLegendSizeProp(prop) {
+  if (!_legendActiveId) return;
+  var cfg = _legendConfig[_legendActiveId];
+  cfg.sizeProp = prop;
+  document.getElementById('cfgSizeRange').style.display = prop ? '' : 'none';
+  if (prop) {
+    var numProps = getLayerNumericProps(_legendActiveId);
+    var vals = numProps[prop];
+    if (vals) {
+      cfg.propRange = [Math.min.apply(null,vals), Math.max.apply(null,vals)];
+    }
+  } else {
+    cfg.propRange = null;
+  }
+  applyLegendToMap(_legendActiveId);
+  buildSubLegends(_legendActiveId);
+}
+
+function onLegendSizeRange() {
+  if (!_legendActiveId) return;
+  var cfg = _legendConfig[_legendActiveId];
+  cfg.sizeMin = parseInt(document.getElementById('cfgSizeMin').value) || 6;
+  cfg.sizeMax = parseInt(document.getElementById('cfgSizeMax').value) || 24;
+  applyLegendToMap(_legendActiveId);
+  buildSubLegends(_legendActiveId);
+}
+
+// --- Map property value to size ---
+function propToSize(rawVal, cfg) {
+  if (!cfg.propRange || cfg.propRange[0] === cfg.propRange[1]) return cfg.size;
+  var ratio = (rawVal - cfg.propRange[0]) / (cfg.propRange[1] - cfg.propRange[0]);
+  return cfg.sizeMin + ratio * (cfg.sizeMax - cfg.sizeMin);
+}
+
+function getElementPropValue(el, prop) {
+  if (!prop) return null;
+  try {
+    var d = JSON.parse(el.getAttribute('data-props'));
+    var v = d[prop];
+    if (v == null) return null;
+    return parseFloat(String(v).replace(/[,，¥\s]/g,'').replace(/[^\d.-]/g,''));
+  } catch(e) { return null; }
+}
+
+function applyLegendToMap(id) {
+  var cfg = _legendConfig[id];
+  if (!cfg) return;
+  var els = document.querySelectorAll('.map-inner [data-layer="'+id+'"][data-props]');
+  els.forEach(function(el) {
+    var w = cfg.size, h = cfg.size;
+    if (cfg.sizeProp) {
+      var val = getElementPropValue(el, cfg.sizeProp);
+      if (val != null && !isNaN(val)) w = h = propToSize(val, cfg);
+    }
+    el.style.width = Math.round(w) + 'px';
+    el.style.height = Math.round(h) + 'px';
+
+    // Determine shape and color —categorical mapping overrides base
+    var shape = cfg.shape;
+    var color = cfg.color;
+    if (cfg.catProp && cfg.catMapping) {
+      var catVal = getElementStringProp(el, cfg.catProp);
+      if (catVal && cfg.catMapping[catVal] !== undefined) {
+        var mapped = cfg.catMapping[catVal];
+        if (cfg.catType === 'shape') shape = mapped;
+        else if (cfg.catType === 'color') color = mapped;
+      }
+      // Apply category visibility
+      if (cfg.catVisibility && cfg.catVisibility[catVal] === false) {
+        el.style.display = 'none';
+      } else {
+        el.style.display = '';
+      }
+    }
+
+    el.style.background = color;
+    el.style.transform = '';
+    el.style.borderRadius = '0';
+    switch(shape) {
+      case 'circle':   el.style.clipPath = 'url(#clip-circle)'; break;
+      case 'diamond':  el.style.clipPath = 'url(#clip-diamond)'; break;
+      case 'square':   el.style.clipPath = 'url(#clip-square)'; break;
+      case 'triangle': el.style.clipPath = 'url(#clip-triangle)'; break;
+      case 'pin':      el.style.clipPath = 'url(#clip-pin)'; break;
+      default:         el.style.clipPath = 'url(#clip-circle)'; break;
+    }
+    // Shadow via filter:drop-shadow —works with clip-path for all shapes
+    if (color.startsWith('#')) {
+      var r2=parseInt(color.slice(1,3),16), g2=parseInt(color.slice(3,5),16), b2=parseInt(color.slice(5,7),16);
+      el.style.filter = 'drop-shadow(0 1px 3px rgba('+r2+','+g2+','+b2+',.4))';
+    }
+  });
+}
+
+// --- Get string property value from element ---
+function getElementStringProp(el, prop) {
+  if (!prop) return null;
+  try {
+    var d = JSON.parse(el.getAttribute('data-props'));
+    var v = d[prop];
+    return v != null ? String(v) : null;
+  } catch(e) { return null; }
+}
+
+function toggleSubLegends(id) {
+  // Inline layer-item sub-legends
+  var lsub = document.getElementById('layer-sub-'+id);
+  var lbtn = document.querySelector('.layer-toggle[data-toggle-id="'+id+'"]');
+  if (lsub) {
+    if (lsub.classList.contains('show')) {
+      lsub.classList.remove('show');
+      if (lbtn) lbtn.classList.add('collapsed');
+    } else {
+      lsub.classList.add('show');
+      if (lbtn) lbtn.classList.remove('collapsed');
+    }
+  }
+}
+
+// --- Build all sub-legends for a layer ---
+function buildSubLegends(id) {
+  var cfg = _legendConfig[id];
+  var lbtn = document.querySelector('.layer-toggle[data-toggle-id="'+id+'"]');
+  var hasGrad = buildGraduatedLegend(id);
+  var hasCat = buildCategoricalLegend(id);
+  // Inline layer-item toggle & sub-legends
+  if (hasGrad || hasCat) {
+    if (lbtn) { lbtn.classList.add('visible'); lbtn.classList.remove('collapsed'); }
+    var lsub = document.getElementById('layer-sub-'+id);
+    if (lsub) lsub.classList.add('show');
+  } else {
+    if (lbtn) lbtn.classList.remove('visible');
+    var lsub = document.getElementById('layer-sub-'+id);
+    if (lsub) lsub.classList.remove('show');
+  }
+}
+
+function buildGraduatedLegend(id) {
+  var lgrad = document.getElementById('layer-grad-'+id);
+  var cfg = _legendConfig[id];
+  if (!cfg || !cfg.sizeProp || !cfg.propRange) {
+    if (lgrad) lgrad.innerHTML = '';
+    return false;
+  }
+  var min = cfg.propRange[0], max = cfg.propRange[1];
+  if (min === max) { if (lgrad) lgrad.innerHTML = ''; return false; }
+
+  var steps = 3;
+  var sizes = [];
+  for (var i = 0; i < steps; i++) {
+    var val = min + (max - min) * i / (steps - 1);
+    sizes.push(Math.round(propToSize(val, cfg)));
+  }
+
+  // Fixed gap between circles, regardless of circle size
+  var gap = 8;
+  var symW = 44; // fixed symbol container horizontal width
+
+  // Total height = sum of sizes + gaps between them
+  var totalH = sizes[0] + sizes[1] + sizes[2] + gap * 2;
+
+  var html = '<div class="legend-subtitle">按「'+cfg.sizeProp+'」映射大小</div>'+
+    '<div class="legend-grad-canvas" style="position:relative;height:'+totalH+'px;width:100%">';
+
+  var gradShape = cfg.shape || 'circle';
+  var y = 0;
+  for (var i = 0; i < steps; i++) {
+    var val = min + (max - min) * i / (steps - 1);
+    var sz = sizes[i];
+    var shapeClip = 'url(#clip-circle)';
+    switch(gradShape) {
+      case 'circle':   shapeClip = 'url(#clip-circle)'; break;
+      case 'diamond':  shapeClip = 'url(#clip-diamond)'; break;
+      case 'square':   shapeClip = 'url(#clip-square)'; break;
+      case 'triangle': shapeClip = 'url(#clip-triangle)'; break;
+      case 'pin':      shapeClip = 'url(#clip-pin)'; break;
+      default:         shapeClip = 'url(#clip-circle)';
+    }
+    html += '<div style="position:absolute;top:'+y+'px;left:0;right:0;height:'+sz+'px;display:flex;align-items:center;gap:6px">'+
+      '<div class="legend-grad-symbol" style="width:'+symW+'px;height:'+sz+'px">'+
+        '<div class="legend-grad-circle" style="width:'+sz+'px;height:'+sz+'px;background:'+cfg.color+';clip-path:'+shapeClip+';filter:drop-shadow(0 1px 3px rgba(0,0,0,.15))"></div>'+
+      '</div>'+
+      '<span class="legend-grad-label">'+val.toLocaleString()+'</span>'+
+      '</div>';
+    y += sz + gap;
+  }
+
+  html += '</div>';
+  if (lgrad) lgrad.innerHTML = html;
+  return true;
+}
+
+function buildCategoricalLegend(id) {
+  var lcat = document.getElementById('layer-cat-'+id);
+  var cfg = _legendConfig[id];
+  if (!cfg || !cfg.catProp || !cfg.catMapping) {
+    if (lcat) lcat.innerHTML = '';
+    return false;
+  }
+  var keys = Object.keys(cfg.catMapping);
+  if (keys.length === 0) { if (lcat) lcat.innerHTML = ''; return false; }
+  // Ensure catVisibility object exists (all visible by default)
+  if (!cfg.catVisibility) cfg.catVisibility = {};
+  var vis = cfg.catVisibility;
+  var html = '<div class="legend-subtitle">按「'+cfg.catProp+'」映射'+(cfg.catType==='color'?'颜色':'形状')+'</div>';
+  keys.forEach(function(k) {
+    var mapped = cfg.catMapping[k];
+    var hidden = (vis[k] === false); // false = hidden; absent = visible
+    var checkedClass = hidden ? '' : ' checked';
+    var swatchStyle = '';
+    if (cfg.catType === 'color') {
+      swatchStyle = 'background:'+mapped+';';
+    } else {
+      swatchStyle = 'background:'+cfg.color+';';
+    }
+    var catShape = (cfg.catType === 'color') ? (cfg.shape || 'circle') : mapped;
+    switch(catShape) {
+      case 'circle':   swatchStyle += 'clip-path:url(#clip-circle)'; break;
+      case 'diamond':  swatchStyle += 'clip-path:url(#clip-diamond)'; break;
+      case 'square':   swatchStyle += 'clip-path:url(#clip-square)'; break;
+      case 'triangle': swatchStyle += 'clip-path:url(#clip-triangle)'; break;
+      case 'pin':      swatchStyle += 'clip-path:url(#clip-pin)'; break;
+      default:         swatchStyle += 'clip-path:url(#clip-circle)';
+    }
+    html += '<div class="legend-cat-row">'+
+      '<div class="legend-cat-checkbox'+checkedClass+'" onclick="toggleCatVisibility(\''+id+'\',\''+_escapeCatKey(k)+'\',this)" data-cat-key="'+_escapeCatAttr(k)+'">'+
+      '<svg width=\"8\" height=\"8\" viewBox=\"0 0 8 8\"><path d=\"M1.5 4l2 2 3-4\" stroke=\"#fff\" stroke-width=\"1\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></div>'+
+      '<div class=\"legend-cat-symbol\"><div class=\"legend-cat-swatch\" style=\"'+swatchStyle+'\"></div></div>'+
+      '<span class=\"legend-cat-name\">'+_escapeCatHTML(k)+'</span>'+
+      '</div>';
+  });
+  if (lcat) lcat.innerHTML = html;
+  return true;
+}
+
+// --- Escape helpers for category keys in HTML/JS ---
+function _escapeCatHTML(k) {
+  return String(k).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escapeCatKey(k) {
+  return String(k).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+function _escapeCatAttr(k) {
+  return String(k).replace(/"/g,'&quot;');
+}
+
+// --- Toggle category visibility ---
+function toggleCatVisibility(id, key, el) {
+  var cfg = _legendConfig[id];
+  if (!cfg) return;
+  if (!cfg.catVisibility) cfg.catVisibility = {};
+  // Toggle: if currently checked (visible) →uncheck (hide); else →check (show)
+  var isVisible = el.classList.contains('checked');
+  if (isVisible) {
+    el.classList.remove('checked');
+    cfg.catVisibility[key] = false;
+  } else {
+    el.classList.add('checked');
+    cfg.catVisibility[key] = true; // or delete to keep sparse
+  }
+  // Update map elements for this category
+  _updateCatElementVisibility(id, key, !isVisible);
+  // Sync sibling checkboxes (symbol panel + inline layer panel)
+  _syncCatCheckboxes(id, key, !isVisible);
+}
+
+// --- Sync all checkboxes for the same id+key across inline sub-legends ---
+function _syncCatCheckboxes(id, key, visible) {
+  var sel = '.legend-cat-checkbox[data-cat-key="'+_escapeCatAttr(key)+'"]';
+  var container = document.getElementById('layer-cat-'+id);
+  if (!container) return;
+  container.querySelectorAll(sel).forEach(function(cb) {
+    if (visible) cb.classList.add('checked');
+    else cb.classList.remove('checked');
+  });
+}
+
+// --- Show/hide map elements matching a category key ---
+function _updateCatElementVisibility(id, key, visible) {
+  var cfg = _legendConfig[id];
+  if (!cfg || !cfg.catProp) return;
+  var prop = cfg.catProp;
+  var els = document.querySelectorAll('.map-inner [data-layer="'+id+'"][data-props]');
+  els.forEach(function(el) {
+    var v = getElementStringProp(el, prop);
+    if (v === key) {
+      el.style.display = visible ? '' : 'none';
+    }
+  });
+}
+
+// --- Categorical property selection ---
+function onLegendCatProp(prop) {
+  if (!_legendActiveId) return;
+  var cfg = _legendConfig[_legendActiveId];
+  cfg.catProp = prop;
+  cfg.catMapping = {};
+  cfg.catVisibility = {}; // reset visibility when prop changes
+  var typeRow = document.getElementById('cfgCatTypeRow');
+  if (prop) {
+    typeRow.style.display = '';
+    cfg.catType = 'shape';
+    document.querySelectorAll('#cfgCatTypeRow .legend-cat-type-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-cat-type') === 'shape');
+    });
+    // Assign default shapes/colors round-robin
+    var strProps = getLayerStringProps(_legendActiveId);
+    var vals = strProps[prop] || [];
+    vals.forEach(function(v, i) {
+      cfg.catMapping[v] = cfg.catType === 'shape' ? _legendShapes[i % _legendShapes.length] : _legendColors[i % _legendColors.length];
+    });
+    renderCatValues(_legendActiveId);
+  } else {
+    typeRow.style.display = 'none';
+  }
+  applyLegendToMap(_legendActiveId);
+  buildSubLegends(_legendActiveId);
+}
+
+function onLegendCatType(type) {
+  if (!_legendActiveId) return;
+  var cfg = _legendConfig[_legendActiveId];
+  cfg.catType = type;
+  document.querySelectorAll('#cfgCatTypeRow .legend-cat-type-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-cat-type') === type);
+  });
+  // Re-map all values with new type's defaults
+  cfg.catMapping = {};
+  var strProps = getLayerStringProps(_legendActiveId);
+  var vals = strProps[cfg.catProp] || [];
+  vals.forEach(function(v, i) {
+    cfg.catMapping[v] = type === 'shape' ? _legendShapes[i % _legendShapes.length] : _legendColors[i % _legendColors.length];
+  });
+  renderCatValues(_legendActiveId);
+  applyLegendToMap(_legendActiveId);
+  buildSubLegends(_legendActiveId);
+}
+
+function onLegendCatValueSet(val, target) {
+  if (!_legendActiveId) return;
+  var cfg = _legendConfig[_legendActiveId];
+  cfg.catMapping[val] = target;
+  renderCatValues(_legendActiveId);
+  applyLegendToMap(_legendActiveId);
+  buildSubLegends(_legendActiveId);
+}
+
+function renderCatValues(id) {
+  var cfg = _legendConfig[id];
+  var container = document.getElementById('cfgCatValues');
+  if (!container) return;
+  var strProps = getLayerStringProps(id);
+  var vals = strProps[cfg.catProp] || [];
+  var html = '';
+  vals.forEach(function(v) {
+    var current = cfg.catMapping[v] || '';
+    html += '<div class="legend-cat-val-row">'+
+      '<span class="legend-cat-val-label" title="'+v+'">'+v+'</span>'+
+      '<div class="legend-cat-val-pickers">';
+    if (cfg.catType === 'shape') {
+      _legendShapes.forEach(function(s) {
+        var active = (s === current) ? ' active' : '';
+        html += '<div class="legend-cat-shape-opt'+active+'" onclick="event.stopPropagation();onLegendCatValueSet(\''+v+'\',\''+s+'\')">'+
+          '<svg width="12" height="12" viewBox="0 0 14 14">'+_legendShapeSVG(s, s===current?'var(--primary)':'#94A3B8')+'</svg></div>';
+      });
+    } else {
+      _legendColors.forEach(function(c) {
+        var active = (c === current) ? ' active' : '';
+        html += '<div class="legend-cat-color-opt'+active+'" style="background:'+c+'" onclick="event.stopPropagation();onLegendCatValueSet(\''+v+'\',\''+c+'\')"></div>';
+      });
+    }
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// Close popover on outside click
+document.addEventListener('click', function(e) {
+  if (_legendActiveId && !e.target.closest('.layer-gear') && !e.target.closest('.legend-config')) {
+    closeLegendConfig();
+  }
+});
+
+// Init on load
+initLegend();
+initLayerDragHandles();
+applyLayerOrder();
+// Timeline starts inactive — activate via checkbox
+document.getElementById('timelinePanel').classList.add('disabled');
+
+// Auto-load remote layers on page load
+loadRemoteLayers();
+
+// --- Update layer element count badges ---
+function updateLayerCounts() {
+  document.querySelectorAll('[data-count-layer]').forEach(function(badge) {
+    var layerId = badge.getAttribute('data-count-layer');
+    var count = getLayerElements(layerId).length;
+    badge.textContent = count > 0 ? count : '';
+  });
+}
+updateLayerCounts();
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Dynamic remote layer loading
+// ════════════════════════════════════════════════════════════════════════════
+var _remoteLayersLoaded = false;
+var REMOTE_API_URL = ''; // Set to your server endpoint, e.g. '/api/layers'
+
+// ── Mock remote data in GeoJSON format ──
+function getMockRemoteData() {
+  return {
+    layers: [
+      {
+        id: 'species',
+        name: '物种观测',
+        defaultShape: 'circle',
+        defaultColor: '#3B82F6',
+        geojson: {
+          type: 'FeatureCollection',
+          features: [
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.24,39.82] }, properties:{ '位点':'样地-A01','物种':'乔木','时间':'07:30','高度':26.7 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.28,39.85] }, properties:{ '位点':'样地-A02','物种':'乔木','时间':'08:15','高度':12.6 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.21,39.78] }, properties:{ '位点':'样地-A03','物种':'乔木','时间':'07:50','高度':18.3 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.31,39.80] }, properties:{ '位点':'样地-A04','物种':'乔木','时间':'09:00','高度':17.1 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.26,39.75] }, properties:{ '位点':'样地-A05','物种':'乔木','时间':'10:20','高度':28.9 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.35,39.86] }, properties:{ '位点':'样地-A06','物种':'乔木','时间':'08:45','高度':27.6 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.30,39.73] }, properties:{ '位点':'样地-A07','物种':'乔木','时间':'11:10','高度':32.5 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.38,39.84] }, properties:{ '位点':'样地-B01','物种':'灌木','时间':'06:45','高度':1.6 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.42,39.86] }, properties:{ '位点':'样地-B02','物种':'灌木','时间':'07:20','高度':3.0 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.36,39.76] }, properties:{ '位点':'样地-B03','物种':'灌木','时间':'09:35','高度':1.3 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.45,39.82] }, properties:{ '位点':'样地-B04','物种':'灌木','时间':'10:05','高度':2.1 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.40,39.77] }, properties:{ '位点':'样地-B05','物种':'灌木','时间':'12:30','高度':3.4 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.34,39.71] }, properties:{ '位点':'样地-B06','物种':'灌木','时间':'14:15','高度':1.3 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.44,39.74] }, properties:{ '位点':'样地-B07','物种':'灌木','时间':'15:50','高度':2.1 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.39,39.69] }, properties:{ '位点':'样地-C01','物种':'草本','时间':'08:00','高度':1.2 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.47,39.78] }, properties:{ '位点':'样地-C02','物种':'草本','时间':'09:15','高度':1.1 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.43,39.67] }, properties:{ '位点':'样地-C03','物种':'草本','时间':'10:40','高度':0.6 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.51,39.73] }, properties:{ '位点':'样地-C04','物种':'草本','时间':'11:55','高度':1.1 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.37,39.64] }, properties:{ '位点':'样地-C05','物种':'草本','时间':'13:20','高度':1.5 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.50,39.70] }, properties:{ '位点':'样地-C06','物种':'草本','时间':'15:05','高度':0.2 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.46,39.62] }, properties:{ '位点':'样地-C07','物种':'草本','时间':'16:30','高度':1.5 } }
+          ]
+        }
+      },
+      {
+        id: 'traffic',
+        name: '交通流量',
+        defaultShape: 'diamond',
+        defaultColor: '#059669',
+        geojson: {
+          type: 'FeatureCollection',
+          features: [
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.35,39.94] }, properties:{ '位点':'西直门','时间':'07:30','流量':8500 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.45,39.90] }, properties:{ '位点':'国贸桥','时间':'08:00','流量':12000 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.39,39.84] }, properties:{ '位点':'大红门','时间':'08:30','流量':6200 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.47,39.98] }, properties:{ '位点':'望京西','时间':'09:00','流量':9800 } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.28,39.91] }, properties:{ '位点':'五棵松','时间':'10:00','流量':5400 } }
+          ]
+        }
+      },
+      {
+        id: 'airquality',
+        name: '空气质量',
+        defaultShape: 'circle',
+        defaultColor: '#8B5CF6',
+        geojson: {
+          type: 'FeatureCollection',
+          features: [
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.30,39.96] }, properties:{ '位点':'海淀站','时间':'06:00','AQI':45,'等级':'优' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.43,39.92] }, properties:{ '位点':'朝阳站','时间':'07:00','AQI':78,'等级':'良' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.65,39.90] }, properties:{ '位点':'通州站','时间':'08:00','AQI':112,'等级':'轻度' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.28,39.86] }, properties:{ '位点':'丰台站','时间':'09:00','AQI':65,'等级':'良' } }
+          ]
+        }
+      }
+    ]
+  };
+}
+
+// ── Convert a GeoJSON FeatureCollection to internal element format ──
+function geojsonToElements(fc) {
+  var elements = [];
+  (fc.features || []).forEach(function(feat) {
+    var geom = feat.geometry;
+    var props = feat.properties || {};
+    if (geom && geom.type === 'Point' && geom.coordinates && geom.coordinates.length >= 2) {
+      var pct = lonLatToPct(geom.coordinates[0], geom.coordinates[1]);
+      // Always inject lon/lat into props if not present
+      if (props.lon === undefined) props.lon = geom.coordinates[0];
+      if (props.lat === undefined) props.lat = geom.coordinates[1];
+      elements.push({ left: pct.left, top: pct.top, props: props });
+    }
+  });
+  return elements;
+}
+
+// ── Add a single dynamic layer ──
+function addDynamicLayer(layerDef) {
+  try {
+    var layerId = layerDef.id;
+    var layerName = layerDef.name;
+
+    // Skip if already exists
+    if (document.querySelector('.layer-item[data-layer="' + layerId + '"]')) return;
+
+    // ── Create map elements ──
+    var mapInner = document.getElementById('mapInner');
+    if (!mapInner) return;
+    (layerDef.elements || []).forEach(function(elDef) {
+      var div = document.createElement('div');
+      div.className = 'species-marker';
+      div.setAttribute('data-layer', layerId);
+      div.setAttribute('data-props', JSON.stringify(elDef.props));
+      div.style.left = elDef.left + '%';
+      div.style.top = elDef.top + '%';
+      div.addEventListener('click', function(e) {
+        e.stopPropagation();
+        selectFeature(this);
+      });
+      mapInner.appendChild(div);
+    });
+
+    // ── Create layer item in panel ──
+    var groupBody = document.getElementById('businessGroupBody');
+    if (!groupBody) return;
+    var checkboxSVG = '<svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    var item = document.createElement('div');
+    item.className = 'layer-item active';
+    item.setAttribute('data-layer', layerId);
+    item.innerHTML =
+      '<div class="checkbox checked">' + checkboxSVG + '</div>' +
+      '<span class="layer-item-name">' + layerName + '</span>' +
+      '<span class="layer-count-badge" data-count-layer="' + layerId + '"></span>' +
+      '<span class="layer-opacity">100%</span>';
+    groupBody.appendChild(item);
+
+    // Wire checkbox
+    item.querySelector('.checkbox').addEventListener('click', function(e) {
+      e.stopPropagation();
+      this.classList.toggle('checked');
+      var it = this.closest('.layer-item');
+      var lid = it.getAttribute('data-layer');
+      if (this.classList.contains('checked')) {
+        it.classList.remove('inactive'); it.classList.add('active');
+        if (lid) showLayer(lid);
+      } else {
+        it.classList.remove('active'); it.classList.add('inactive');
+        if (lid) hideLayer(lid);
+      }
+      updateLayerCount();
+    });
+
+    // Wire click for highlighting
+    item.addEventListener('click', function(e) {
+      if (_marquee && _marquee._suppressClick) return;
+      toggleLayerHighlight(layerId, e);
+    });
+
+    // Wire double-click for focus
+    item.addEventListener('dblclick', function(e) {
+      focusOnLayer(layerId);
+      var els = document.querySelectorAll('.map-inner [data-layer="' + layerId + '"][data-props]');
+      if (els.length > 0) renderMultiProperty(Array.from(els));
+    });
+
+    // Wire opacity drag
+    var opacityEl = item.querySelector('.layer-opacity');
+    if (opacityEl) {
+      opacityEl.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        opacityDrag.active = true;
+        opacityDrag.el = opacityEl;
+        opacityDrag.layerId = layerId;
+        opacityDrag.startX = e.clientX;
+        opacityDrag.startVal = parseInt(opacityEl.textContent);
+        opacityEl.classList.add('dragging');
+      });
+      opacityEl.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        var t = e.touches[0];
+        opacityDrag.active = true;
+        opacityDrag.el = opacityEl;
+        opacityDrag.layerId = layerId;
+        opacityDrag.startX = t.clientX;
+        opacityDrag.startVal = parseInt(opacityEl.textContent);
+        opacityEl.classList.add('dragging');
+      }, { passive: false });
+    }
+
+    // Register legend config
+    _legendConfig[layerId] = {
+      shape: layerDef.defaultShape || 'circle',
+      color: layerDef.defaultColor || '#3B82F6',
+      size: 12,
+      sizeProp: '', sizeMin: 6, sizeMax: 24,
+      catProp: '', catType: 'shape', catMapping: {},
+      layerId: layerId, label: layerName
+    };
+    _injectLayerItemSymbols(layerId);
+    _updateLayerItemSwatch(layerId);
+    applyLegendToMap(layerId);
+    buildSubLegends(layerId);
+
+    // Rebuild filter picker to include new layer
+    rebuildFilterPicker();
+
+    // Update business group count
+    var bizCount = document.querySelectorAll('#businessGroupBody .layer-item').length;
+    var gc = document.getElementById('businessGroupCount');
+    if (gc) gc.textContent = bizCount;
+
+    updateLayerCounts();
+    applyLayerOrder();
+    initLayerDragHandles();
+  } catch(e) {
+    console.error('addDynamicLayer error:', e);
+  }
+}
+
+// ── Load layers from server (or mock) ──
+function loadRemoteLayers() {
+  if (_remoteLayersLoaded) {
+    alert('图层已加载。');
+    return;
+  }
+
+  var btn = document.getElementById('btnLoadRemote');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+
+  function processData(data) {
+    try {
+      _remoteLayersLoaded = true;
+      (data.layers || []).forEach(function(layer) {
+        // If layer has geojson, convert to elements; otherwise use elements directly
+        if (layer.geojson) {
+          layer.elements = geojsonToElements(layer.geojson);
+        }
+        addDynamicLayer(layer);
+      });
+      if (btn) { btn.style.opacity = '1'; btn.title = '图层已加载'; }
+    } catch(e) {
+      alert('处理图层数据出错: ' + e.message);
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  }
+
+  if (REMOTE_API_URL) {
+    fetch(REMOTE_API_URL)
+      .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(processData)
+      .catch(function(err) {
+        alert('加载远程图层失败: ' + err.message);
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+      });
+  } else {
+    // Demo: immediate load with mock data
+    processData(getMockRemoteData());
+  }
+}
+// ════════════════════════════════════════════════════════════════════════════
+</script>
+
+</body>
+</html>
+
+
+
+

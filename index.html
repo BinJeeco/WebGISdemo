@@ -851,7 +851,7 @@ html, body {
   filter: none;
 }
 [data-props].time-active {
-  transform: scale(1.5);
+  transform: scale(calc(var(--fix-scale, 1) * 1.5));
   z-index: 25;
   opacity: 1 !important;
   box-shadow: 0 0 12px 3px rgba(59,130,246,.55);
@@ -3932,24 +3932,22 @@ function requestTileRender() {
   var iw = rect.width / vs;
   var ih = rect.height / vs;
 
-  var tl = screenToLonLat(rect.left, rect.top);
-  var br = screenToLonLat(rect.left + rect.width, rect.top + rect.height);
-
   var z = Math.round(Math.log(3512 * mapScale) / Math.LN2);
   z = Math.max(0, Math.min(18, z));
-  // Keep tiles >= 64px to avoid massive tiny-tile grid
   var minPx = 64;
   var maxZ = Math.floor(Math.log(iw * 360 / ((LON_R - LON_0) * minPx)) / Math.LN2);
   z = Math.min(z, Math.max(0, maxZ));
 
   var n = Math.pow(2, z);
-  // Initialize Mercator grid for coordinate conversions BEFORE tile rendering
   _mercGrid = {
     z: z, n: n,
     ox: (LON_0 + 180) / 360 * 256 * n,
     oy: (1 - MERC_Y_0 / Math.PI) / 2 * 256 * n,
     scale: iw / ((LON_R - LON_0) / 360 * 256 * n)
   };
+
+  var tl = screenToLonLat(rect.left, rect.top);
+  var br = screenToLonLat(rect.left + rect.width, rect.top + rect.height);
 
   var t0 = lonLatToTileXY(Math.min(tl.lon, br.lon), Math.max(tl.lat, br.lat), z);
   var t1 = lonLatToTileXY(Math.max(tl.lon, br.lon), Math.min(tl.lat, br.lat), z);

@@ -2947,6 +2947,28 @@ function zoomOut() {
   zoomToLevel(zoomLevel);
 }
 
+// Sync Tianditu Leaflet map with custom pan/zoom
+function syncLeafletView() {
+  try {
+    var lm = window.__tiandituMap;
+    if (!lm) return;
+    var canvas = document.getElementById('mapCanvas');
+    if (!canvas) return;
+    var cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+    if (cw === 0 || ch === 0) return;
+    // Leaflet zoom level (clamp 1-18)
+    var lz = Math.max(1, Math.min(18, zoomLevel));
+    // Compute viewport center in Leaflet container pixel coords,
+    // offset by panX/panY (which are in viewport coordinate system)
+    var cx = cw / 2 - panX;
+    var cy = ch / 2 - panY;
+    var center = lm.containerPointToLatLng([cx, cy]);
+    lm.setView(center, lz, { animate: false });
+  } catch(e) {
+    // Leaflet not ready yet
+  }
+}
+
 // Zoom-to-center: keep the visual center point fixed when scale changes
 function zoomToLevel(level) {
   var newScale = Math.pow(1.3, level - 12);
@@ -2971,6 +2993,7 @@ function zoomToLevel(level) {
   mapScale = newScale;
   document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
   applyMapTransform();
+  syncLeafletView();
 }
 
 // --- Double-click layer →focus & fit zoom ---
@@ -3027,6 +3050,7 @@ function focusOnLayer(layerId) {
 
   document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
   applyMapTransform();
+  syncLeafletView();
 }
 
 // Attach double-click to layer items
@@ -4173,6 +4197,7 @@ document.addEventListener('mousemove', function(e) {
     panX = panStartPanX + (e.clientX - panStartX) / scale3;
     panY = panStartPanY + (e.clientY - panStartY) / scale3;
     applyMapTransform();
+    syncLeafletView();
   }
 });
 
@@ -5325,13 +5350,20 @@ function loadRemoteLayers() {
       mapContainer.style.height = canvas.offsetHeight + 'px';
       tiandituMap.invalidateSize();
     }
+    // Re-sync after resize
+    if (typeof syncLeafletView === 'function') syncLeafletView();
   }
 
   resizeLeaflet();
   window.addEventListener('resize', resizeLeaflet);
 
-  // Expose for potential layer toggle
+  // Expose for pan/zoom sync
   window.__tiandituMap = tiandituMap;
+
+  // Initial sync with custom map
+  setTimeout(function() {
+    if (typeof syncLeafletView === 'function') syncLeafletView();
+  }, 100);
 })();
 </script>
 

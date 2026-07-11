@@ -5294,15 +5294,27 @@ function loadRemoteLayers() {
     attributionControl: false
   });
 
-  // Tianditu vector tile layer
+  // Tianditu vector tile layer (HTTPS to avoid mixed content on GitHub Pages)
   var tk = '5174400cacad2ef73af9250a8ecfca00';
-  var tileUrl = 'http://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=tiles&tk=' + tk;
+  var vecUrl = 'https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=tiles&tk=' + tk;
+  var cvaUrl = 'https://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=tiles&tk=' + tk;
 
-  L.tileLayer(tileUrl, {
+  // Vector tile base
+  L.tileLayer(vecUrl, {
     tileSize: 256,
     minZoom: 1,
     maxZoom: 18,
-    continuousWorld: true
+    continuousWorld: true,
+    crossOrigin: 'anonymous'
+  }).addTo(tiandituMap);
+
+  // Label overlay layer
+  L.tileLayer(cvaUrl, {
+    tileSize: 256,
+    minZoom: 1,
+    maxZoom: 18,
+    continuousWorld: true,
+    crossOrigin: 'anonymous'
   }).addTo(tiandituMap);
 
   // Resize handler to keep Leaflet map covering the canvas

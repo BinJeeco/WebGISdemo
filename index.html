@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebGIS demo</title>
+<title>MapVista — 多层级地图展示</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 /* ===== CSS Variables ===== */
 :root {
@@ -68,7 +67,7 @@ html, body {
   gap: 16px;
   padding: 12px 12px 12px 16px;
   background: var(--primary);
-  z-index: 100;
+  z-index: 999;
 }
 .topbar .logo {
   font-size: 18px;
@@ -83,20 +82,26 @@ html, body {
   display: flex;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 /* ===== Layer Panel (图层面板) ===== */
 .layer-panel {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
   width: var(--sidebar-w);
-  min-width: 0;
-  height: 100%;
+  z-index: 999;
   display: flex;
   flex-direction: column;
   background: var(--white);
   border-right: 1px solid var(--border-light);
   overflow: hidden;
-  transition: width .25s cubic-bezier(.4,0,.2,1);
-  flex-shrink: 0;
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  transform: translateX(0);
+  box-shadow: 2px 0 12px rgba(0,0,0,.06);
+}
+.layer-panel.collapsed {
+  transform: translateX(calc(-1 * var(--sidebar-w) + 48px));
 }
 
 /* Collapse toggle button shared style */
@@ -104,22 +109,20 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--divider-bg);
+  background: rgba(255,255,255,.85);
   cursor: pointer;
   color: var(--text-secondary);
-  border-radius: 4px;
-  transition: background .12s, transform .25s ease;
+  border-radius: 5px;
+  transition: background .12s, transform .25s ease, border-color .12s;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
-.panel-collapse-btn:hover { background: rgba(0,0,0,.06); }
+.panel-collapse-btn:hover { background: var(--white); border-color: var(--primary); color: var(--primary); }
 
 /* Left panel collapsed state */
-.layer-panel.collapsed {
-  width: 48px;
-}
 .layer-panel.collapsed .panel-collapse-btn {
   transform: rotate(180deg);
   background: var(--white);
@@ -133,8 +136,17 @@ html, body {
 .panel-collapsed-header {
   display: none;
   justify-content: center;
-  padding: 12px 0;
-  flex-shrink: 0;
+  align-items: flex-start;
+  width: 48px;
+  padding-top: 11px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--white);
+}
+.layer-panel.collapsed .panel-collapsed-header {
+  display: flex;
 }
 .layer-panel.collapsed .panel-collapsed-header {
   display: flex;
@@ -612,7 +624,7 @@ html, body {
 .layer-marquee {
   position: fixed;
   pointer-events: none;
-  z-index: 100;
+  z-index: 999;
   border: 1.5px dashed var(--primary);
   background: rgba(59,130,246,.08);
   display: none;
@@ -625,18 +637,7 @@ html, body {
   overflow: hidden;
   background: linear-gradient(to right, var(--map-top), var(--map-bot));
   min-width: 0;
-}
-
-/* Leaflet tile layer sits below custom map elements */
-#leafletMap {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-#leafletMap .leaflet-control-zoom,
-#leafletMap .leaflet-control-attribution {
-  display: none !important;
+  z-index: 1;
 }
 
 /* Inner layer that pans —contains map grid, markers, regions, labels */
@@ -651,18 +652,37 @@ html, body {
 }
 
 /* Map overlay grid */
-.map-grid {
+.tile-layer {
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(209,217,202,.3);
   pointer-events: none;
+  z-index: 0;
+}
+#annoLayer {
+  z-index: 1;
+}
+.tile-layer img {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+/* Floating map controls overlay (above panels) */
+.map-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  pointer-events: none;
+}
+.map-controls > * {
+  pointer-events: auto;
 }
 
 /* Map Toolbar (left floating on map) */
 .map-toolbar {
   position: absolute;
   top: 12px;
-  left: 12px;
+  left: 332px;
   width: var(--toolbar-w);
   display: flex;
   flex-direction: column;
@@ -672,7 +692,7 @@ html, body {
   background: rgba(255,255,255,.95);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,.10);
-  z-index: 10;
+  z-index: 30;
 }
 .toolbar-btn {
   display: flex;
@@ -705,7 +725,7 @@ html, body {
 /* Zoom Control (right bottom of map) */
 .zoom-control {
   position: absolute;
-  right: 40px;
+  right: 400px;
   bottom: 60px;
   width: 32px;
   display: flex;
@@ -714,7 +734,7 @@ html, body {
   background: rgba(255,255,255,.95);
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0,0,0,.10);
-  z-index: 10;
+  z-index: 30;
   overflow: hidden;
 }
 .zoom-btn {
@@ -739,12 +759,12 @@ html, body {
 /* Scale bar */
 .scale-bar {
   position: absolute;
-  left: 12px;
+  left: 332px;
   bottom: 55px;
   display: flex;
   align-items: center;
   gap: 4px;
-  z-index: 10;
+  z-index: 30;
 }
 .scale-line {
   width: 80px;
@@ -761,20 +781,34 @@ html, body {
 /* North Arrow */
 .north-arrow {
   position: absolute;
-  right: 50px;
+  right: 410px;
   top: 12px;
-  z-index: 10;
+  z-index: 30;
 }
 
 /* Attribution */
 .attribution {
   position: absolute;
-  left: 12px;
+  left: 332px;
   bottom: 33px;
   font-size: 9px;
   color: var(--text-muted);
   font-family: inherit;
-  z-index: 5;
+  z-index: 30;
+}
+
+/* Panel-state responsive positions for floating controls */
+.main-area.left-collapsed .map-toolbar,
+.main-area.left-collapsed .scale-bar,
+.main-area.left-collapsed .attribution {
+  left: 60px;
+}
+.main-area.right-collapsed .zoom-control { right: 88px; }
+.main-area.right-collapsed .north-arrow { right: 98px; }
+
+/* transition for smooth control repositioning when panels toggle */
+.map-toolbar, .zoom-control, .scale-bar, .north-arrow, .attribution {
+  transition: left .25s cubic-bezier(.4,0,.2,1), right .25s cubic-bezier(.4,0,.2,1);
 }
 
 /* Map markers / overlays */
@@ -787,11 +821,12 @@ html, body {
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
   transition: transform .15s ease;
+  transform: scale(var(--fix-scale, 1));
 }
-.poi-marker:hover { transform: scale(1.3); }
+.poi-marker:hover { transform: scale(calc(var(--fix-scale, 1) * 1.3)); }
 .poi-marker.picked {
-  transform: scale(1.4);
-  z-index: 20;
+  transform: scale(calc(var(--fix-scale, 1) * 1.4));
+  z-index: 999;
 }
 /* Species markers —same visual as POI */
 .species-marker {
@@ -803,11 +838,12 @@ html, body {
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
   transition: transform .15s ease;
+  transform: scale(var(--fix-scale, 1));
 }
-.species-marker:hover { transform: scale(1.3); }
+.species-marker:hover { transform: scale(calc(var(--fix-scale, 1) * 1.3)); }
 .species-marker.picked {
-  transform: scale(1.4);
-  z-index: 20;
+  transform: scale(calc(var(--fix-scale, 1) * 1.4));
+  z-index: 999;
 }
 /* Timeline-driven element states */
 [data-props].time-past {
@@ -868,16 +904,21 @@ html, body {
 
 /* ===== Right Drawer (右抽屉) ===== */
 .right-drawer {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
   width: var(--drawer-w);
-  min-width: 0;
-  height: 100%;
+  z-index: 999;
   display: flex;
   flex-direction: column;
   background: var(--white);
   border-left: 1px solid var(--border-light);
   overflow: hidden;
-  transition: width .25s cubic-bezier(.4,0,.2,1);
-  flex-shrink: 0;
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  transform: translateX(0);
+  box-shadow: -2px 0 12px rgba(0,0,0,.06);
+}
+.right-drawer.collapsed {
+  transform: translateX(calc(var(--drawer-w) - 48px));
 }
 
 /* Drawer collapse toggle (mirrored arrow) */
@@ -885,33 +926,26 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--divider-bg);
+  background: rgba(255,255,255,.85);
   cursor: pointer;
   color: var(--text-secondary);
-  border-radius: 4px;
-  transition: background .12s, transform .25s ease;
+  border-radius: 5px;
+  transition: background .12s, transform .25s ease, border-color .12s;
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
-.drawer-collapse-btn:hover { background: rgba(0,0,0,.06); }
+.drawer-collapse-btn:hover { background: var(--white); border-color: var(--primary); color: var(--primary); }
 
 /* Right drawer collapsed state */
-.right-drawer.collapsed {
-  width: 48px;
-}
 .right-drawer.collapsed .drawer-collapse-btn {
   transform: rotate(180deg);
   background: var(--white);
   border-radius: 6px;
 }
 .right-drawer.collapsed .drawer-header {
-  justify-content: center;
-  padding: 0;
-  background: var(--white);
-}
-.right-drawer.collapsed .drawer-header h2 {
   display: none;
 }
 .right-drawer.collapsed .drawer-content {
@@ -921,9 +955,17 @@ html, body {
   display: none;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  flex-shrink: 0;
+  justify-content: flex-start;
+  width: 48px;
+  padding-top: 11px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--white);
+}
+.right-drawer.collapsed .drawer-collapsed-header {
+  display: flex;
 }
 /* Collapsed hint: vertical tab strip */
 .drawer-collapsed-strip {
@@ -1013,7 +1055,7 @@ html, body {
   padding: 8px 12px;
   background: var(--bg-main);
   border-top: 1px solid var(--border-light);
-  z-index: 100;
+  z-index: 999;
 }
 .status-text {
   font-size: 12px;
@@ -1797,7 +1839,7 @@ svg { flex-shrink: 0; }
 
 <!-- ==================== TOPBAR (顶栏) ==================== -->
 <header class="topbar">
-  <div class="logo">WebGIS demo</div>
+  <div class="logo">MapVista</div>
 
 </header>
 
@@ -1836,7 +1878,7 @@ svg { flex-shrink: 0; }
       <div class="layer-group-body">
         <div class="layer-item active" data-layer="basemap-street">
           <div class="checkbox checked"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7l3 3 5-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <span class="layer-item-name">basemap-street</span>
+          <span class="layer-item-name">天地图底图</span>
           <span class="layer-opacity readonly">100%</span>
         </div>
         <div class="layer-item inactive" data-layer="basemap-hillshade">
@@ -1906,29 +1948,31 @@ svg { flex-shrink: 0; }
 
   <!-- ===== MAP CANVAS (地图画布) ===== -->
   <section class="map-canvas" id="mapCanvas">
-    <!-- Leaflet real tile map background -->
-    <div id="leafletMap"></div>
     <div class="selection-box" id="selectionBox" style="display:none;"></div>
     <!-- ===== Pannable map layer ===== -->
     <div class="map-inner" id="mapInner">
-      <div class="map-grid" data-layer="basemap-street"></div>
+      <div class="tile-layer" id="tileLayer"></div>
+      <div class="tile-layer" id="annoLayer"></div>
 
       
 
       <!-- Map markers and overlays (positioned via % for responsive) -->
-      <div class="poi-marker" style="left:62.2%; top:33.3%;" data-layer="poi" data-props='{"位点":"国贸CBD","时段":"早高峰","RAI":85,"lon":116.43,"lat":39.90}'></div>
-      <div class="poi-marker" style="left:40.0%; top:20.0%;" data-layer="poi" data-props='{"位点":"中关村","时段":"午间","RAI":52,"lon":116.33,"lat":39.96}'></div>
-      <div class="poi-marker" style="left:71.1%; top:13.3%;" data-layer="poi" data-props='{"位点":"望京SOHO","时段":"晚高峰","RAI":93,"lon":116.47,"lat":39.99}'></div>
-      <div class="poi-marker" style="left:77.8%; top:57.8%;" data-layer="poi" data-props='{"位点":"亦庄开发区","时段":"夜间","RAI":28,"lon":116.50,"lat":39.79}'></div>
-      <div class="poi-marker" style="left:66.7%; top:37.8%;" data-layer="poi" data-props='{"位点":"三里屯","时段":"晚高峰","RAI":71,"lon":116.45,"lat":39.88}'></div>
+      <div class="poi-marker" style="left:68.3%; top:32.0%;" data-layer="poi" data-props='{"位点":"国贸CBD","时段":"早高峰","RAI":85,"lon":116.43,"lat":39.90}'></div>
+      <div class="poi-marker" style="left:43.9%; top:19.2%;" data-layer="poi" data-props='{"位点":"中关村","时段":"午间","RAI":52,"lon":116.33,"lat":39.96}'></div>
+      <div class="poi-marker" style="left:78.0%; top:12.8%;" data-layer="poi" data-props='{"位点":"望京SOHO","时段":"晚高峰","RAI":93,"lon":116.47,"lat":39.99}'></div>
+      <div class="poi-marker" style="left:85.4%; top:55.4%;" data-layer="poi" data-props='{"位点":"亦庄开发区","时段":"夜间","RAI":28,"lon":116.50,"lat":39.79}'></div>
+      <div class="poi-marker" style="left:73.2%; top:36.2%;" data-layer="poi" data-props='{"位点":"三里屯","时段":"晚高峰","RAI":71,"lon":116.45,"lat":39.88}'></div>
 
-      <div class="poi-marker poi-selected" style="left:46.1%; top:53.8%" data-layer="admin" data-props='{"name":"朝阳区","类型":"行政区划","行政编码":"110105","面积":"470.8 km²","人口":"3,452,000","GDP":"¥ 7,561 亿"}'></div>
+      <div class="poi-marker poi-selected" style="left:68.3%; top:27.7%" data-layer="admin" data-props='{"name":"朝阳区","类型":"行政区划","行政编码":"110105","面积":"470.8 km²","人口":"3,452,000","GDP":"¥ 7,561 亿","lon":116.43,"lat":39.92}'></div>
 
-      <div class="region-outline" style="left:42.1%; top:48.7%; width:15.8%; height:10.3%" data-layer="admin"></div>
-      <div class="map-label" style="left:49%; top:51.6%" data-layer="admin">朝阳区</div>
+      <div class="region-outline" style="left:36.6%; top:21.3%; width:61.0%; height:31.9%" data-layer="admin"></div>
+      <div class="map-label" style="left:67.1%; top:37.3%" data-layer="admin">朝阳区</div>
     </div><!-- /#mapInner -->
 
-    <!-- ===== Fixed overlays (not panned) ===== -->
+  </section>
+
+  <!-- ===== Floating Map Controls (above panels) ===== -->
+  <div class="map-controls">
     <!-- Map toolbar -->
     <div class="map-toolbar">
       <button class="toolbar-btn" title="选择工具">
@@ -1971,13 +2015,19 @@ svg { flex-shrink: 0; }
 
     <!-- Attribution -->
     <div class="attribution">&copy; ArcGIS | MapLibre | OSM</div>
-  </section>
+  </div>
 
   <!-- ===== RIGHT DRAWER (右抽屉 属性详情) ===== -->
   <aside class="right-drawer">
     <div class="drawer-header">
       <h2>属性详情</h2>
       <button class="drawer-collapse-btn" title="收缩属性面板" onclick="toggleDrawer()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <div class="drawer-collapsed-header">
+      <button class="drawer-collapse-btn" title="展开属性面板" onclick="toggleDrawer()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
@@ -2140,10 +2190,13 @@ var layerCollapsed = false;
 function toggleLayerPanel() {
   layerCollapsed = !layerCollapsed;
   var panel = document.querySelector('.layer-panel');
+  var mainArea = document.querySelector('.main-area');
   if (layerCollapsed) {
     panel.classList.add('collapsed');
+    if (mainArea) mainArea.classList.add('left-collapsed');
   } else {
     panel.classList.remove('collapsed');
+    if (mainArea) mainArea.classList.remove('left-collapsed');
   }
 }
 
@@ -2152,10 +2205,13 @@ var drawerCollapsed = false;
 function toggleDrawer() {
   drawerCollapsed = !drawerCollapsed;
   var drawer = document.querySelector('.right-drawer');
+  var mainArea = document.querySelector('.main-area');
   if (drawerCollapsed) {
     drawer.classList.add('collapsed');
+    if (mainArea) mainArea.classList.add('right-collapsed');
   } else {
     drawer.classList.remove('collapsed');
+    if (mainArea) mainArea.classList.remove('right-collapsed');
   }
 }
 
@@ -2939,7 +2995,7 @@ var zoomLevel = 12;
 var mapScale = 1;
 
 function zoomIn() {
-  zoomLevel = Math.min(zoomLevel + 1, 21);
+  zoomLevel = Math.min(zoomLevel + 1, 18);
   zoomToLevel(zoomLevel);
 }
 function zoomOut() {
@@ -2947,31 +3003,9 @@ function zoomOut() {
   zoomToLevel(zoomLevel);
 }
 
-// Sync Tianditu Leaflet map with custom pan/zoom
-function syncLeafletView() {
-  try {
-    var lm = window.__tiandituMap;
-    if (!lm) return;
-    var canvas = document.getElementById('mapCanvas');
-    if (!canvas) return;
-    var cw = canvas.offsetWidth, ch = canvas.offsetHeight;
-    if (cw === 0 || ch === 0) return;
-    // Leaflet zoom level (clamp 1-18)
-    var lz = Math.max(1, Math.min(18, zoomLevel));
-    var cx = cw / 2 - panX;
-    var cy = ch / 2 - panY;
-    // Set zoom FIRST so containerPointToLatLng uses the correct pixel scale
-    lm.setZoom(lz);
-    var center = lm.containerPointToLatLng([cx, cy]);
-    lm.panTo(center, { animate: false });
-  } catch(e) {
-    // Leaflet not ready yet
-  }
-}
-
 // Zoom-to-center: keep the visual center point fixed when scale changes
 function zoomToLevel(level) {
-  var newScale = Math.pow(1.3, level - 12);
+  var newScale = Math.pow(2, level - 12);
   var oldScale = mapScale;
   if (oldScale === newScale) return;
 
@@ -2993,7 +3027,6 @@ function zoomToLevel(level) {
   mapScale = newScale;
   document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
   applyMapTransform();
-  syncLeafletView();
 }
 
 // --- Double-click layer →focus & fit zoom ---
@@ -3029,9 +3062,9 @@ function focusOnLayer(layerId) {
   var fitScale = Math.min(targetW / bbW_inner, targetH / bbH_inner);
 
   // Snap to nearest zoom level
-  var nearestLevel = Math.round(Math.log(fitScale) / Math.log(1.3) + 12);
-  nearestLevel = Math.max(1, Math.min(21, nearestLevel));
-  var newScale = Math.pow(1.3, nearestLevel - 12);
+  var nearestLevel = Math.round(Math.log(fitScale) / Math.LN2 + 12);
+  nearestLevel = Math.max(1, Math.min(18, nearestLevel));
+  var newScale = Math.pow(2, nearestLevel - 12);
 
   // Inner coordinate of bounding box center
   var bbCx = (minX + maxX) / 2;
@@ -3050,7 +3083,6 @@ function focusOnLayer(layerId) {
 
   document.querySelector('.status-medium').textContent = '缩放级别: ' + zoomLevel;
   applyMapTransform();
-  syncLeafletView();
 }
 
 // Attach double-click to layer items
@@ -3877,14 +3909,121 @@ function applyResponsiveScale() {
   wrapper.style.top = offsetY + 'px';
 }
 
+// ═══ 天地图 WMTS 底图 ═══
+var _tileCache = {};
+var _tileDirty = true;
+
+function lonLatToTileXY(lon, lat, z) {
+  var n = Math.pow(2, z);
+  return {
+    x: Math.floor((lon + 180) / 360 * n),
+    y: Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n)
+  };
+}
+
+function requestTileRender() {
+  if (!_tileDirty) return;
+  _tileDirty = false;
+  var canvas = document.getElementById('mapCanvas');
+  if (!canvas) return;
+
+  var rect = canvas.getBoundingClientRect();
+  var vs = getViewportScale();
+  var iw = rect.width / vs;
+  var ih = rect.height / vs;
+
+  var tl = screenToLonLat(rect.left, rect.top);
+  var br = screenToLonLat(rect.left + rect.width, rect.top + rect.height);
+
+  var z = Math.round(Math.log(3512 * mapScale) / Math.LN2);
+  z = Math.max(0, Math.min(18, z));
+  // Keep tiles >= 64px to avoid massive tiny-tile grid
+  var minPx = 64;
+  var maxZ = Math.floor(Math.log(iw * 360 / ((LON_R - LON_0) * minPx)) / Math.LN2);
+  z = Math.min(z, Math.max(0, maxZ));
+
+  var n = Math.pow(2, z);
+  // Initialize Mercator grid for coordinate conversions BEFORE tile rendering
+  _mercGrid = {
+    z: z, n: n,
+    ox: (LON_0 + 180) / 360 * 256 * n,
+    oy: (1 - MERC_Y_0 / Math.PI) / 2 * 256 * n,
+    scale: iw / ((LON_R - LON_0) / 360 * 256 * n)
+  };
+
+  var t0 = lonLatToTileXY(Math.min(tl.lon, br.lon), Math.max(tl.lat, br.lat), z);
+  var t1 = lonLatToTileXY(Math.max(tl.lon, br.lon), Math.min(tl.lat, br.lat), z);
+
+  // Render base tiles + annotation tiles
+  _renderTileLayer('vec_w', 'vec', 'tileLayer', z, t0, t1, iw, ih);
+  _renderTileLayer('cva_w', 'cva', 'annoLayer', z, t0, t1, iw, ih);
+}
+
+function _renderTileLayer(service, layerName, containerId, z, t0, t1, iw, ih) {
+  var layer = document.getElementById(containerId);
+  if (!layer) return;
+  var n = Math.pow(2, z);
+  var key = service;
+
+  var base = 'https://t0.tianditu.gov.cn/' + service + '/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=' + layerName + '&style=default&tilematrixset=w&tilematrix=' + z + '&tilerow={y}&tilecol={x}&format=tiles&tk=bf34997db472b7bc84a3d9b13f1f6a0e';
+
+  // Mercator pixel origin (top-left of viewport in tile-grid pixels)
+  var mOriginX = (LON_0 + 180) / 360 * 256 * n;
+  var mOriginY = (1 - MERC_Y_0 / Math.PI) / 2 * 256 * n;
+  // Uniform pixel scale (pixels per Mercator tile-grid pixel) — same for X and Y
+  var scale = iw / ((LON_R - LON_0) / 360 * 256 * n);
+  var tilePx = 256 * scale;
+
+  var keep = {};
+  for (var tx = Math.max(0, t0.x - 1); tx <= Math.min(n - 1, t1.x + 1); tx++) {
+    for (var ty = Math.max(0, t0.y - 1); ty <= Math.min(n - 1, t1.y + 1); ty++) {
+      var url = base.replace('{x}', tx).replace('{y}', ty);
+      keep[url] = true;
+
+      if (_tileCache[url] && _tileCache[url].parentNode) continue;
+
+      var img = _tileCache[url];
+      if (!img) {
+        img = document.createElement('img');
+        img.src = url;
+        img.style.display = 'block';
+        _tileCache[url] = img;
+      }
+
+      var lx = (tx * 256 - mOriginX) * scale;
+      var ly = (ty * 256 - mOriginY) * scale;
+
+      img.style.left = lx + 'px';
+      img.style.top = ly + 'px';
+      img.style.width = tilePx + 'px';
+      img.style.height = tilePx + 'px';
+
+      if (!img.parentNode) layer.appendChild(img);
+    }
+  }
+
+  // Remove stale tiles from this layer
+  for (var k in _tileCache) {
+    if (!keep[k] && _tileCache[k].parentNode && _tileCache[k].parentNode === layer) {
+      layer.removeChild(_tileCache[k]);
+    }
+  }
+}
+
 // Apply pan + zoom to map inner only (not the whole viewport)
 function applyMapTransform() {
   var inner = document.getElementById('mapInner');
   if (!inner) return;
   inner.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + mapScale + ')';
+  // Counter-scale marker elements so they stay fixed screen size
+  inner.style.setProperty('--fix-scale', (1 / mapScale));
+  _tileDirty = true;
+  requestTileRender();
 }
 window.addEventListener('resize', applyResponsiveScale);
 applyResponsiveScale();
+// Initial tile render
+setTimeout(function() { _tileDirty = true; requestTileRender(); }, 100);
 
 // --- Mouse wheel on map canvas for zoom ---
 document.getElementById('mapCanvas').addEventListener('wheel', function(e) {
@@ -4083,36 +4222,61 @@ var LON_R  = 116.56;   // lon at left:100%
 var LAT_0  = 40.05;    // lat at top:0%
 var LAT_R  = 39.58;    // lat at top:100%
 
+// Web Mercator helpers (matching Tianditu vec_w projection)
+function mercY(lat) {
+  return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+}
+function mercYToLat(y) {
+  return Math.atan(Math.exp(y)) * 360 / Math.PI - 90;
+}
+var MERC_Y_0 = mercY(LAT_0);
+var MERC_Y_R = mercY(LAT_R);
+
+// Current Mercator tile grid (updated each tile render)
+var _mercGrid = { z: 12, n: 4096, scale: 1, ox: 0, oy: 0 };
+
 function screenToLonLat(clientX, clientY) {
   var canvasRect = mapCanvas.getBoundingClientRect();
   var vs = getViewportScale();
 
-  // Mouse position in canvas coordinate space
   var mx = (clientX - canvasRect.left) / vs;
   var my = (clientY - canvasRect.top) / vs;
 
-  // Convert to map-inner percentage coordinates
-  var innerW = canvasRect.width / vs;
-  var innerH = canvasRect.height / vs;
-  var pctX = ((mx - panX) / mapScale) / innerW * 100;
-  var pctY = ((my - panY) / mapScale) / innerH * 100;
+  // Canvas pixel → inner pixel → Mercator tile-pixel (same coords as tile renderer)
+  var ix = (mx - panX) / mapScale;
+  var iy = (my - panY) / mapScale;
+  var mpx = _mercGrid.ox + ix / _mercGrid.scale;
+  var mpy = _mercGrid.oy + iy / _mercGrid.scale;
 
-  var lon = LON_0 + (LON_R - LON_0) * pctX / 100;
-  var lat = LAT_0 + (LAT_R - LAT_0) * pctY / 100;
+  // Mercator tile-pixel → geographic
+  var lon = mpx / (256 * _mercGrid.n) * 360 - 180;
+  var yMerc = Math.PI * (1 - 2 * mpy / (256 * _mercGrid.n));
+  var lat = mercYToLat(yMerc);
   return { lon: lon, lat: lat };
 }
 
-// Inverse: lon/lat → map % position
+// Inverse: lon/lat → map % position (uses same Mercator grid as tiles)
 function lonLatToPct(lon, lat) {
-  var pctX = (lon - LON_0) / (LON_R - LON_0) * 100;
-  var pctY = (lat - LAT_0) / (LAT_R - LAT_0) * 100;
-  return { left: pctX, top: pctY };
+  var canvasRect = mapCanvas.getBoundingClientRect();
+  var vs = getViewportScale();
+  var innerW = canvasRect.width / vs;
+  var innerH = canvasRect.height / vs;
+
+  // Geographic → Mercator tile-pixel
+  var mpx = (lon + 180) / 360 * 256 * _mercGrid.n;
+  var yMerc = mercY(lat);
+  var mpy = (1 - yMerc / Math.PI) / 2 * 256 * _mercGrid.n;
+
+  // Mercator tile-pixel → inner pixel → %
+  var ix = (mpx - _mercGrid.ox) * _mercGrid.scale;
+  var iy = (mpy - _mercGrid.oy) * _mercGrid.scale;
+  return { left: ix / innerW * 100, top: iy / innerH * 100 };
 }
 
 // Click on map canvas background →deselect (skip if box-select just finished)
 document.getElementById('mapCanvas').addEventListener('click', function(e) {
   if (boxSelectJustFinished) return;
-  if (e.target === this || e.target.classList.contains('map-grid')) {
+  if (e.target === this || e.target.id === 'tileLayer') {
     _unpickAll();
   }
 });
@@ -4197,7 +4361,6 @@ document.addEventListener('mousemove', function(e) {
     panX = panStartPanX + (e.clientX - panStartX) / scale3;
     panY = panStartPanY + (e.clientY - panStartY) / scale3;
     applyMapTransform();
-    syncLeafletView();
   }
 });
 
@@ -5023,8 +5186,8 @@ applyLayerOrder();
 // Timeline starts inactive — activate via checkbox
 document.getElementById('timelinePanel').classList.add('disabled');
 
-// Auto-load remote layers on page load
-loadRemoteLayers();
+// Auto-load remote layers after tile grid is initialized
+setTimeout(function() { loadRemoteLayers(); }, 300);
 
 // --- Update layer element count badges ---
 function updateLayerCounts() {
@@ -5295,74 +5458,6 @@ function loadRemoteLayers() {
   }
 }
 // ════════════════════════════════════════════════════════════════════════════
-</script>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-// ════════════════════════════════════════════════════════════════════════════
-// Tianditu (天地图) tile layer initialization
-// ════════════════════════════════════════════════════════════════════════════
-(function() {
-  var mapContainer = document.getElementById('leafletMap');
-  if (!mapContainer) return;
-
-  // Initialize Leaflet map centered on Beijing, non-interactive
-  var tiandituMap = L.map('leafletMap', {
-    center: [39.9042, 116.4074],
-    zoom: 12,
-    zoomControl: false,
-    dragging: false,
-    scrollWheelZoom: false,
-    doubleClickZoom: false,
-    touchZoom: false,
-    keyboard: false,
-    attributionControl: false
-  });
-
-  // Tianditu vector tile layer (HTTPS to avoid mixed content on GitHub Pages)
-  var tk = '5174400cacad2ef73af9250a8ecfca00';
-  var vecUrl = 'https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=tiles&tk=' + tk;
-  var cvaUrl = 'https://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=tiles&tk=' + tk;
-
-  // Vector tile base
-  L.tileLayer(vecUrl, {
-    tileSize: 256,
-    minZoom: 1,
-    maxZoom: 18,
-    noWrap: true
-  }).addTo(tiandituMap);
-
-  // Label overlay layer
-  L.tileLayer(cvaUrl, {
-    tileSize: 256,
-    minZoom: 1,
-    maxZoom: 18,
-    noWrap: true
-  }).addTo(tiandituMap);
-
-  // Resize handler to keep Leaflet map covering the canvas
-  function resizeLeaflet() {
-    var canvas = document.getElementById('mapCanvas');
-    if (canvas && mapContainer) {
-      mapContainer.style.width = canvas.offsetWidth + 'px';
-      mapContainer.style.height = canvas.offsetHeight + 'px';
-      tiandituMap.invalidateSize();
-    }
-    // Re-sync after resize
-    if (typeof syncLeafletView === 'function') syncLeafletView();
-  }
-
-  resizeLeaflet();
-  window.addEventListener('resize', resizeLeaflet);
-
-  // Expose for pan/zoom sync
-  window.__tiandituMap = tiandituMap;
-
-  // Initial sync with custom map
-  setTimeout(function() {
-    if (typeof syncLeafletView === 'function') syncLeafletView();
-  }, 100);
-})();
 </script>
 
 </body>

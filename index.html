@@ -2958,12 +2958,12 @@ function syncLeafletView() {
     if (cw === 0 || ch === 0) return;
     // Leaflet zoom level (clamp 1-18)
     var lz = Math.max(1, Math.min(18, zoomLevel));
-    // Compute viewport center in Leaflet container pixel coords,
-    // offset by panX/panY (which are in viewport coordinate system)
     var cx = cw / 2 - panX;
     var cy = ch / 2 - panY;
+    // Set zoom FIRST so containerPointToLatLng uses the correct pixel scale
+    lm.setZoom(lz);
     var center = lm.containerPointToLatLng([cx, cy]);
-    lm.setView(center, lz, { animate: false });
+    lm.panTo(center, { animate: false });
   } catch(e) {
     // Leaflet not ready yet
   }
@@ -5329,8 +5329,7 @@ function loadRemoteLayers() {
     tileSize: 256,
     minZoom: 1,
     maxZoom: 18,
-    continuousWorld: true,
-    crossOrigin: 'anonymous'
+    noWrap: true
   }).addTo(tiandituMap);
 
   // Label overlay layer
@@ -5338,8 +5337,7 @@ function loadRemoteLayers() {
     tileSize: 256,
     minZoom: 1,
     maxZoom: 18,
-    continuousWorld: true,
-    crossOrigin: 'anonymous'
+    noWrap: true
   }).addTo(tiandituMap);
 
   // Resize handler to keep Leaflet map covering the canvas
